@@ -10,7 +10,7 @@ Some of this is automated (see examples further down) but should always be confi
 The tool only supports analysis for now, fine-tuning and demodulation will be covered in further versions.<br>
 At this stage I might also switch from Tkinter to PyQt for better performance ; be aware that currently you will likely experience some delay if your file contains samples in the order of a few millions and the GUI will become downright painful to use with a file containing tens of millions of samples or more.
 
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic1.jpg" alt="Main" width="600" height="400"/><br>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_1.png" alt="Main" width="600" height="400"/><br>
 
 The GUI is in French by default, but can be switched to English (line 33, just swap "get_fra_lib" to "get_eng_lib").
 <br>
@@ -69,14 +69,14 @@ The --onefile argument removes the console, which is not needed for normal use o
 
 ### Examples :
 - Spectrogram of a FSK17 signal <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.jpg" alt="FSK17" width="600" height="400"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.png" alt="FSK17" width="600" height="400"/>
 - Constellation of a dPMR signal <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.jpg" alt="dPMR" width="600" height="400"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.png" alt="dPMR" width="600" height="400"/>
 - PSD of a WiFi signal <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.jpg" alt="WiFi" width="600" height="400"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="WiFi" width="600" height="400"/>
 - Symbol rate of a TETRA signal <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_5.jpg" alt="TETRA" width="600" height="400"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_5.png" alt="TETRA" width="600" height="400"/>
 - Autocorrelation of a TETRAPOL signal <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_6.jpg" alt="TETRAPOL" width="600" height="400"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_6.png" alt="TETRAPOL" width="600" height="400"/>
 - Results of a CIS-45 OFDM signal <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.jpg" alt="CIS-45" width="600" height="400"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="CIS-45" width="600" height="400"/>
