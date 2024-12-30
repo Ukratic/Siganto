@@ -84,14 +84,13 @@ def find_sample_width(file_path):
     with open(file_path,'rb') as wav_file:
         header = wav_file.read(44) # Premiers 44 bytes = réservés header
         if header[:4] != b'RIFF' or header[8:12] != b'WAVE' or header[12:16] != b'fmt ': # vérifie si c'est un fichier WAV
-            tk.messagebox.showinfo(lang["error"], lang["invalid_wav"])
+            tk.messagebox.showerror(lang["error"], lang["invalid_wav"])
             raise ValueError(lang["invalid_wav"])
         sample_width = struct.unpack('<H', header[34:36])[0]
     return sample_width
 
 def load_wav():
     global filepath, frame_rate, iq_wave, N
-
     if filepath is None:
         filepath = tk.filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if not filepath:
@@ -122,7 +121,6 @@ def load_wav():
         if debug is True:
             print("Erreur de conversion IQ. Retrait de quelques échantillons pour faire correspondre I et Q")
     display_file_info()
-
     # Plot graphes initiaux après chargement du fichier
     plot_initial_graphs()
 
@@ -146,7 +144,7 @@ def clear_plot():
 
 # fonc fermeture du fichier, nettoie tout
 def close_wav():
-    global filepath, iq_wave, root
+    global filepath, iq_wave
     filepath = None
     iq_wave = None
     clear_plot()
@@ -171,9 +169,9 @@ def plot_initial_graphs():
     ax = (a0, a1)
 
     # Spectrogramme 
-    print("Génération du spectrogramme FFT et de la DSP")
+    print(lang["spec_dsp"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     num_rows = len(iq_wave) // N
     spectrogram = np.zeros((num_rows, N))
@@ -205,7 +203,7 @@ def define_N():
             print("Taille de fenêtre FFT non définie")
         return
     N = (int(N/2))*2 # N doit être pair
-    print("Fenêtre FFT de taille N = ", N)
+    print(lang["fft_window"], N)
     plot_initial_graphs()
     display_file_info()
 
@@ -222,15 +220,16 @@ def plot_other_graphs():
     a1 = fig.add_subplot(spec[2, 0])
     a2 = fig.add_subplot(spec[2, 1])
     ax = (a0, a1, a2)
-    print("Génération du spectrogramme STFT, de la constellation et de la DSP avec max")
+    print(lang["spec_stft"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     # STFT
-    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=N//2)
+    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=N//2, window_func='hann')
     ax[0].imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0],cmap=cm.jet)
     ax[0].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
+    ax[0].set_title(lang["hann_window"])
 
     # Constellation plot
     ax[1].scatter(np.real(iq_wave), np.imag(iq_wave), s=1)
@@ -259,9 +258,9 @@ def plot_3d_spectrogram():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["spec_3d"])
-    print("Génération du spectrogramme 3D")
+    print(lang["spec_3d"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     
     freqs, times, spectrogram = em.compute_spectrogram(iq_wave, frame_rate, N)
@@ -286,9 +285,9 @@ def time_amplitude():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["time_amp"])
-    print("Génération du graphe amplitude en fonction du temps")
+    print(lang["time_amp"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     time = np.arange(len(iq_wave)) / frame_rate
@@ -310,9 +309,9 @@ def spectre_persistance():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["persist_spectrum"])
-    print("Génération du spectre de persistance")
+    print(lang["persist_spectrum"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     f, min_power, max_power, persistence = em.persistance_spectrum(iq_wave, frame_rate, N)
@@ -361,9 +360,9 @@ def spectrogramme_seul():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["spectrogram"])
-    print("Génération du spectrogramme seul")
+    print(lang["spectrogram"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     num_rows = len(iq_wave) // N
@@ -383,7 +382,7 @@ def spectrogramme_seul():
 
 # Affichage infos supplémentaires
 def display_frq_info():
-    print("Affichage des informations de puissance")
+    print(lang["frq_info"])
     if iq_wave is None :
         if debug is True:
             print("Fichier non chargé")
@@ -542,7 +541,7 @@ def mean_filter():
             return
         if debug is True:
             print("Signal moyenné avec un seuil de ", iq_floor, " dB")
-    print("Signal moyenné")
+    print(lang["mean"])
     plot_initial_graphs()
 
 def downsample_signal():
@@ -554,7 +553,7 @@ def downsample_signal():
         return
     decimation_factor = int(rate)
     iq_wave, frame_rate = em.downsample(iq_wave, frame_rate, decimation_factor)
-    print("Fréquence d'échantillonnage réduite à ", frame_rate, "Hz")
+    print(lang["sampling_frq"], frame_rate, "Hz")
     plot_initial_graphs()
     display_file_info()
 
@@ -567,7 +566,7 @@ def upsample_signal():
         return
     oversampling_factor = int(rate)
     iq_wave, frame_rate = em.upsample(iq_wave, frame_rate, oversampling_factor)
-    print("Fréquence d'échantillonnage augmentée à ", frame_rate, "Hz")
+    print(lang["sampling_frq"], frame_rate, "Hz")
     plot_initial_graphs()
     display_file_info()
 
@@ -632,7 +631,7 @@ def psf():
     fig.suptitle(lang["psf"])
     print("Génération de la FFT de puissance")
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     clock, f, peak_freq = em.power_spectrum_fft(iq_wave, frame_rate)
     ax = plt.subplot()
@@ -656,9 +655,9 @@ def mts():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["mts"])
-    print("Génération de la FFT de puissance alternative")
+    print(lang["mts"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     clock, f, peak_freq = em.mean_threshold_spectrum(iq_wave, frame_rate)
     ax = plt.subplot()
@@ -685,9 +684,9 @@ def pseries():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["pseries"])
-    print("Génération des métriques de puissance alternatives")
+    print(lang["pseries"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     spec = fig.add_gridspec(2, 1)
     fig.tight_layout()
@@ -718,8 +717,8 @@ def pseries():
 
 def dsp():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    print("Génération de la DSP")
-    print("Affichage de la largeur de bande")
+    print(lang["dsp"])
+    print(lang["bandwidth"])
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["dsp"])
@@ -748,9 +747,9 @@ def constellation():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["constellation"])
-    print("Génération de la constellation")
+    print(lang["constellation"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     ax.scatter(np.real(iq_wave), np.imag(iq_wave), s=1)
@@ -770,9 +769,9 @@ def autocorr():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["autocorr"])
-    print("Génération de l'autocorrélation du signal")
+    print(lang["autocorr"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     yx, lags = em.autocorrelation(iq_wave, frame_rate)
@@ -797,9 +796,9 @@ def autocorr_full():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["autocorr_full"])
-    print("Génération de l'autocorrélation complète du signal.")
+    print(lang["autocorr_full"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     if not tk.messagebox.askokcancel(lang["autocorr_full"], lang["confirm_wait"]):
         return
@@ -825,9 +824,9 @@ def phase_difference():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["diff_phase"])
-    print("Génération du graphe de différence de phase")
+    print(lang["diff_phase"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     time, phase_diff = em.phase_time_angle(iq_wave, frame_rate, diff_window)
@@ -849,9 +848,9 @@ def freq_difference():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["diff_freq"])
-    print("Génération du graphe de différence de fréquence")
+    print(lang["diff_freq"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
@@ -873,9 +872,9 @@ def phase_cumulative():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(f"{lang['distrib_phase']} : {lang['experimental']}")
-    print("Génération de la distribution cumulée de la phase")
+    print(f"{lang['distrib_phase']} : {lang['experimental']}")
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     hist, bins = em.phase_cumulative_distribution(iq_wave)
@@ -895,9 +894,9 @@ def phase_spectrum():
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["phase_spectrum"])
-    print("Génération du spectre de phase")
+    print(lang["phase_spectrum"])
     if not filepath:
-        print("Pas de fichier chargé")
+        print(lang["no_file"])
         return
     ax = plt.subplot()
     ax.phase_spectrum(iq_wave, frame_rate)
@@ -927,7 +926,7 @@ def set_diff_params():
 # OFDM
 def alpha_from_symbol():
     global Tu, toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    # calcul de alpha à partir de la durée symbole OFDM (Tu), estimée par l'utilisateur avec la fonction d'autocorrélation
+    # calcul de alpha frq à partir de la durée symbole OFDM (Tu), estimée par l'utilisateur avec la fonction d'autocorrélation
     # demander à l'utilisateur de rentrer la durée estimée de Tu
     Tu = tk.simpledialog.askstring(lang["alpha"], lang["estim_tu"])
     if Tu is None:
@@ -970,7 +969,7 @@ def ofdm_results():
     alpha_0 = float(alpha_0)
     dsp()
     bw, fmin, fmax, f, Pxx = em.estimate_bandwidth(iq_wave, frame_rate, N)
-    # show estimated bw in a popup and ask user to confirm or set a new value
+    # affiche BW estimée et demande de valider ou de redéfinir la bande passante
     popup = tk.Toplevel()
     popup.title(lang["bandwidth"])
     popup.geometry("600x100")
@@ -981,14 +980,16 @@ def ofdm_results():
     tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.wait_window()
 
-
     if new_bw.get() == "":
         if debug is True:
             print("Bande passante non définie")
         new_bw = bw
     else:
         new_bw = float(new_bw.get())
-
+    if debug is True:
+        print("Bande passante redéfinie à ", new_bw, " Hz")
+        
+    print(lang["ofdm_results"])
     Tu, Tg, Ts, Df, num = em.calc_ofdm(alpha_0, Tu, new_bw)
     if debug is True:
         print("Paramètres OFDM calculés")
@@ -1229,6 +1230,7 @@ def load_lang_changes():
     mode_button.config(text=lang["cursors_off"])
     clear_button.config(text=lang["clear_cursors"])
     info_label.config(text=lang["load_msg"])
+    peak_button.config(text=lang["peak_find"])
     # Options des menus cascade
     # Graphes : spectre, STFT, 3D, taille FFT
     graphs_menu.add_command(label=lang["group_spec"], command=plot_initial_graphs)
@@ -1325,7 +1327,7 @@ print("            __/ |                       ")
 print("           |___/                        ") 
 
 print("Application démarrée")
-print("Charger un fichier WAV pour commencer l'analyse")
+print(lang["load_msg"])
 
 # A l'ouverture, affiche le logo
 fig = plt.figure()

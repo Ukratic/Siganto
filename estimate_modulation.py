@@ -371,7 +371,8 @@ def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
     Tg = round(cy_px,5)
     Ts = round(estimated_ofdm_symbol_duration + cy_px,5)
     Df = round(Df,3)
-    # Estimate the number of subcarriers in the OFDM symbol from the estimated bandwidth and Df the subcarrier spacing
+    # Estime le nombre de sous-porteuses dans le symbole OFDM à partir de : 1) la bande passante estimée et 2) Df = l'espacement des sous-porteuses
+    # Nb max de sous-porteuses défini à 1000 pour éviter les erreurs dues à des valeurs aberrantes des 2 paramètres
     for N in range(1, 1000):
         if N*Df >= bandwidth:
             break
