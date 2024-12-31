@@ -67,7 +67,7 @@ The following pyinstaller command (having previously set up a virtual env with t
 ```
 pyinstaller --onefile --icon=radio-waves.ico gui_main.py --name SigAnTo
 ```
-Note that with pyinstaller, the --noconsole argument would remove the console which is not necessary for normal GUI use, but this might trigger false antivirus flags.
+Note that with pyinstaller, the --noconsole argument would remove the console, which is not necessary for normal GUI use, but this might trigger false antivirus flags.
 Packaging with Nuitka instead might provide a solution to this, TBD.
 
 ### Examples :
@@ -75,7 +75,7 @@ Packaging with Nuitka instead might provide a solution to this, TBD.
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.png" alt="FSK17"/>
 - Constellation of a dPMR signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.png" alt="dPMR"/>
-- PSD of a WiFi signal <br>
+- PSD of a IS-95 (CDMA) signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="WiFi"/>
 - Symbol rate of a TETRA signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_5.png" alt="TETRA"/>
@@ -83,6 +83,8 @@ Packaging with Nuitka instead might provide a solution to this, TBD.
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_6.png" alt="TETRAPOL"/>
 - Results of a CIS-45 OFDM signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="CIS-45"/>
+- Frequency transitions of a FSK signal <br>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="FSK_transitions"/>
 
 ### Useful resources :
 - Information on signals and some example .wav files available : <br>
