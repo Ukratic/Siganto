@@ -84,7 +84,7 @@ Packaging with Nuitka instead might provide a solution to this, TBD.
 - Results of a CIS-45 OFDM signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="CIS-45"/>
 - Frequency transitions of a FSK signal <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="FSK_transitions"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_8.png" alt="FSK_transitions"/>
 
 ### Useful resources :
 - Information on signals and some example .wav files available : <br>
@@ -95,4 +95,4 @@ Packaging with Nuitka instead might provide a solution to this, TBD.
 
 ### Credits :
 - Drs. FX Socheleau & S Houcke on OFDM blind analysis
-- Dr. March Lichtman on Spectrogram generation
+- Dr. Marc Lichtman on Spectrogram generation
