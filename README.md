@@ -62,13 +62,14 @@ Expected encoding is standard 16bit wav, but 8 to 64bit is supported. Other form
 The repository also contains 2 scripts to convert mp3 and SigMF files into wav, so it can then be read into SigAnTo (or whatever else shares .wav requirements). Be aware the mp3 conversion requires ffmpeg.
 <br><br>
 The code is easily packageable for sharing purposes to people unfamiliar with command line use : <br>
-The following pyinstaller command (having previously set up a virtual env with the code and only the required libraries) will provide you with an executable.<br>
+The following pyinstaller command (having previously set up a virtual env with the code and only the required libraries) will provide you with an executable.
 
 ```
-pyinstaller --onefile --icon=radio-waves.ico gui_main.py --name SigAnTo
+pyinstaller --onefile --noconsole --icon=radio-waves.ico gui_main.py --name SigAnTo
 ```
-Note that with pyinstaller, the --noconsole argument would remove the console, which is not necessary for normal GUI use, but this might trigger false antivirus flags.
-Packaging with Nuitka instead might provide a solution to this, TBD.
+The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib.<br>
+Note that with pyinstaller, the --noconsole argument removes the console which is not necessary for normal GUI use, but might trigger false antivirus flags.
+Packaging with Nuitka instead might provide a solution to this and also improve performance, TBD.
 
 ### Examples :
 - Spectrogram of a FSK17 signal <br>

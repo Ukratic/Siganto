@@ -127,6 +127,9 @@ def load_wav():
 # fonc nettoyage graphe
 def clear_plot():
     try:
+        if cursor_mode:
+            clear_cursors()
+            toggle_cursor_mode()
         for widget in plot_frame.winfo_children():
             widget.destroy() # détruit les widgets tkinter
         plt.cla()
@@ -134,9 +137,6 @@ def clear_plot():
         plt.close('all') # ferme les figures matplotlib
         if toolbar:
             toolbar.destroy() # détruit la toolbar matplotlib
-        if cursor_mode:
-            clear_cursors()
-            toggle_cursor_mode()
     except:
         pass
         if debug is True:
@@ -1317,14 +1317,14 @@ plot_frame.pack(fill=tk.BOTH, expand=True)
 root.protocol("WM_DELETE_WINDOW", on_close)
 
 # Affichage du titre ascii si console activee
-print("   _____ _                   _______    ")
-print("  / ____(_)         /\      |__   __|   ")
-print(" | (___  _  __ _   /  \   _ __ | | ___  ")
-print("  \___ \| |/ _` | / /\ \ | '_ \| |/ _ \ ")
-print("  ____) | | (_| |/ ____ \| | | | | (_) |")
-print(" |_____/|_|\__, /_/    \_\_| |_|_|\___/ ")
-print("            __/ |                       ")
-print("           |___/                        ") 
+print(r"   _____ _                   _______    ")
+print(r"  / ____(_)         /\      |__   __|   ")
+print(r" | (___  _  __ _   /  \   _ __ | | ___  ")
+print(r"  \___ \| |/ _` | / /\ \ | '_ \| |/ _ \ ")
+print(r"  ____) | | (_| |/ ____ \| | | | | (_) |")
+print(r" |_____/|_|\__, /_/    \_\_| |_|_|\___/ ")
+print(r"            __/ |                       ")
+print(r"           |___/                        ") 
 
 print("Application démarrée")
 print(lang["load_msg"])
