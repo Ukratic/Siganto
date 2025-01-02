@@ -1,6 +1,6 @@
 ## SigAnTo
 
-A signal analysis toolbox GUI built in python<br>
+A lightweight signal analysis toolbox GUI.<br><br>
 Built on top of base python (>3.9 with tkinter), numpy, matplotlib and scipy.<br>
 Its low list of dependencies will hopefully allow most people to run it without too much hassle in university or industry environments (or use the executable to avoid dependencies altogether).
 
@@ -21,36 +21,37 @@ Debugging in the console can also be deactivated line 76.
 python3 gui_main.py
 ```
 
-2. Use the SigAnTo executable. It is packaged (see further down how to do this yourself) in French but can still be swapped to English after launch in "Affichage/Switch language".
+2. Use the executable *SigAnto_v1.05.exe*. It is packaged (see further down how to do this yourself) in French but can still be swapped to English after launch in "Affichage/Switch language".
 
 ### Summary of available functions <br>
 #### 1. Display
-- Load .wav file
-- Activate measuring cursors
-- Change FFT window size
+- Load a .wav file. The button reloads the same file if clicked again. Select the button next to it to close the .wav file before loading another.
+- Activate measuring cursors (deactivated by default upon loading a new graph). Distance between 2 cursors is shown and you can also jump to a nearby peak.
+- Change FFT window size (default 512)
 - Change language (english and french available)
-- Display frequency & power information of the signal file
-- Modify parameters for transition and persistence graphs
+- Display frequency & power information of the signal file (Estimated BW, dB level, symbol rate & ACF)
+- Modify parameters for transition (phase, frequency) & persistence graphs
 #### 2. Signal modification
 - Low, High or Band Pass filter
-- Central Frequency move (value or cursor selection)
+- Central Frequency offset (enter a value or by cursor selection)
 - Averaging
-- Down or Up Sampling
-- Cut part of the signal in time (value or cursor selection)
-- Save as new .wav file
+- Down or Up Sampling (by ratio of an integer >1)
+- Cut part of the signal in time (enter a value or by cursor selection)
+- Save as a new .wav file
 #### 3. Time Metrics
-- Spectrogram (several variants)
+- Spectrogram (several variants, including 3D. STFT in Hann window : more options in future versions)
 - Time/Amplitude
 - Persistence Spectrum
 - Phase Transitions
 - Frequency Transitions
 #### 4. Power Metrics
-- Power Spectrum FFT (several variants)
+- Power Spectrum FFT (and variant)
+- Signal power
 - PSD
 #### 5. Phase Metrics
 - Constellation
 - Phase Spectrum
-- Phase Distribution
+- Phase Distribution (experimental ; to improve or remove later)
 #### 6. Cyclostationarity Metrics
 - Autocorrelation function (fast & complete)
 #### 7. OFDM Metrics
@@ -62,14 +63,18 @@ Expected encoding is standard 16bit wav, but 8 to 64bit is supported. Other form
 The repository also contains 2 scripts to convert mp3 and SigMF files into wav, so it can then be read into SigAnTo (or whatever else shares .wav requirements). Be aware the mp3 conversion requires ffmpeg.
 <br><br>
 The code is easily packageable for sharing purposes to people unfamiliar with command line use : <br>
-The following pyinstaller command (having previously set up a virtual env with the code and only the required libraries) will provide you with an executable.
+I would recommend the following pyinstaller command (having previously set up a virtual env with the code and only the required libraries), which would provide you with an directory containing an executable.
 
 ```
-pyinstaller --onefile --noconsole --icon=radio-waves.ico gui_main.py --name SigAnTo
+(python -m) pyinstaller --onedir --noconsole --icon=radio-waves.ico gui_main.py --name SigAnTo
 ```
+Note that the executable provided in this repository was created with --onefile instead of --onedir : resulting in a single file obviously, but with slower start-up (it has to decompress in a temp directory at load).
+
 The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib.<br>
-Note that with pyinstaller, the --noconsole argument removes the console which is not necessary for normal GUI use, but might trigger false antivirus flags.
-Packaging with Nuitka instead might provide a solution to this and also improve performance, TBD.
+The --noconsole argument with pyinstaller removes the console, which is not necessary for normal GUI use, but might trigger false antivirus flags during build.
+
+Packaging with Nuitka instead might lighten the size of the package and improve performance as well, but its ease of use is dependant upon OS, C compiler, python version... so I wouldn't recommend it unless you are used to it.
+
 
 ### Examples :
 - Spectrogram of a FSK17 signal <br>
@@ -86,6 +91,9 @@ Packaging with Nuitka instead might provide a solution to this and also improve 
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="CIS-45"/>
 - Frequency transitions of a FSK signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_8.png" alt="FSK_transitions"/>
+
+### Supported Hardware :
+None ! As previously stated, this tool has no real-time applications.
 
 ### Useful resources :
 - Information on signals and some example .wav files available : <br>
