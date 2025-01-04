@@ -1,7 +1,7 @@
 ## SigAnTo
 
 A lightweight signal analysis toolbox GUI.<br><br>
-Built on top of base python (>3.9 with tkinter), numpy, matplotlib and scipy.<br>
+Built on top of base python (>=3.9 with tkinter), numpy, matplotlib and scipy.<br>
 Its low list of dependencies will hopefully allow most people to run it without too much hassle in university or industry environments (or use the executable to avoid dependencies altogether).
 
 Its purpose is to read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs and measurements.
@@ -9,19 +9,13 @@ Real-time applications are outside of the scope of this tool.<br>
 Some of the identification is automated (see examples further down) but should always be confirmed manually.<br>
 
 The tool only supports analysis for now, fine-tuning and demodulation will be covered in further versions.<br>
-In this next stage, I might also switch from Tkinter to PyQt for better performance ; be aware that you will likely experience some sluggishness if your file contains samples in the order of a few millions and the GUI will become downright painful to use with a file containing several tens of millions of samples or more.
+In these, I might also switch from Tkinter to PyQt for better performance ; be aware that you will likely experience some sluggishness if your file contains samples in the order of a few millions and the GUI will become downright painful to use with a file containing several tens of millions of samples or more.<br>
+
+Expected file encoding is standard 16-bit wav, but 8 to 64-bit is supported. Other formats might be added if there is a need for it.<br>
+
+The repository also contains 2 scripts to convert mp3 and SigMF files into wav, so it can then be read into SigAnTo (or whatever else shares .wav requirements). Be aware the mp3 conversion requires ffmpeg.<br>
 
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_1.png" alt="Main"/><br>
-
-Usage : <br>
-1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file to open the GUI.<br>
-The GUI is in French by default, but can be switched to English (line 33, just swap "get_fra_lib" to "get_eng_lib").<br>
-Debugging in the console can also be deactivated line 76.
-```
-python3 gui_main.py
-```
-
-2. Use the executable *SigAnto_v1.05.exe*. It is packaged (see further down how to do this yourself) in French but can still be swapped to English after launch in "Affichage/Switch language".
 
 ### Summary of available functions <br>
 #### 1. Display
@@ -57,24 +51,29 @@ python3 gui_main.py
 #### 7. OFDM Metrics
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
 
+### Using the app
+1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file to open the GUI.<br>
+The GUI is in French by default, but can be switched to English (line 33, just swap "get_fra_lib" to "get_eng_lib").<br>
+Debugging in the console can also be deactivated line 76.
+```
+python3 gui_main.py
+```
+
+2. Download and use the executable *SigAnto_v1.05.exe*. It is packaged in French but can still be swapped to English after launch in "Affichage/Switch language".
 <br>
-Expected encoding is standard 16bit wav, but 8 to 64bit is supported. Other formats might be added if there is a need for it.
-<br><br>
-The repository also contains 2 scripts to convert mp3 and SigMF files into wav, so it can then be read into SigAnTo (or whatever else shares .wav requirements). Be aware the mp3 conversion requires ffmpeg.
-<br><br>
-The code is easily packageable for sharing purposes to people unfamiliar with command line use : <br>
-I would recommend the following pyinstaller command (having previously set up a virtual env with the code and only the required libraries), which would provide you with an directory containing an executable.
+You can also easily package it yourself to share it to people unfamiliar with command line use : <br>
+I would recommend the following pyinstaller command (having previously set up a virtual env with the files in this repo and only the required libraries), which would provide you with a directory containing an executable.
 
 ```
 (python -m) pyinstaller --onedir --noconsole --icon=radio-waves.ico gui_main.py --name SigAnTo
 ```
 Note that the executable provided in this repository was created with --onefile instead of --onedir : resulting in a single file obviously, but with slower start-up (it has to decompress in a temp directory at load).
+The --noconsole argument with pyinstaller removes the console, which is not necessary for normal GUI use, but might trigger false antivirus flags during build.<br>
 
-The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib.<br>
-The --noconsole argument with pyinstaller removes the console, which is not necessary for normal GUI use, but might trigger false antivirus flags during build.
+Packaging with Nuitka instead might lighten the size of the package and improve performance as well, but its ease of use is dependant upon OS, C compiler, python version... so I wouldn't recommend it unless you know what you are getting into.<br>
 
-Packaging with Nuitka instead might lighten the size of the package and improve performance as well, but its ease of use is dependant upon OS, C compiler, python version... so I wouldn't recommend it unless you are used to it.
-
+The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib so there should be no need to change you python environment if it is >3.8.<br>
+The scipy dependency is responsible for roughly half the size of the app, so I'll remove that at some point by coding some of those functions myself. Matplotlib & Numpy will stay though.
 
 ### Examples :
 - Spectrogram of a FSK17 signal <br>
