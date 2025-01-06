@@ -128,6 +128,7 @@ def get_fra_lib():
         "estim_peaks" : "Ecart (abs) entre deux pics de puissance :",
         "peak_find" : "Pic proche curseur",
         "hann_window" : "Fenêtre de Hann",
+        "f_resol" : "Résolution en fréquence :",
     
     }
     return fra_lib
@@ -260,6 +261,7 @@ def get_eng_lib():
         "estim_peaks" : "Gap (abs) between 2 power peaks :",
         "peak_find" : "Peak near cursor",
         "hann_window" : "Hann Window",
+        "f_resol" : "Frequency resolution :",
 
     }
     return eng_lib

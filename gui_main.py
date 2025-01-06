@@ -427,7 +427,7 @@ def display_file_info():
         return
     info_label.config(text=f"{filepath} {lang['encoding']} {find_sample_width(filepath)} bits \
                       \n{lang['samples']} {len(iq_wave)}. {lang['sampling_frq']} {frame_rate} Hz. \
-                      \n{lang['duree']}: {len(iq_wave)/frame_rate:.2f} sec. {lang['fft_window']} {N}")
+                      \n{lang['duree']}: {len(iq_wave)/frame_rate:.2f} sec. {lang['fft_window']} {N}. {lang['f_resol']} {frame_rate/N:.2f} Hz.")
     if debug is True:
         print("Affichage des informations du fichier")
         print("Chargé: ", filepath)
