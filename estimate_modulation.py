@@ -76,7 +76,7 @@ def compute_spectrogram(iq_wave, frame_rate, N):
     for i in range(num_rows):
         segment = iq_wave[i * N:(i + 1) * N]
         fft_result = np.fft.fftshift(np.fft.fft(segment))
-        spectrogram[i, :] = 10 * np.log10(np.abs(fft_result))
+        spectrogram[i, :] = 10 * np.log10(np.abs(fft_result)**2)
     # Bins fréquence et temps
     freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1/frame_rate))
     times = np.arange(num_rows) * (N / frame_rate)
