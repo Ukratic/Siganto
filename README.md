@@ -59,7 +59,8 @@ Debugging in the console can also be deactivated line 76.
 python3 gui_main.py
 ```
 
-2. Download and use the executable *SigAnto_v1.05.exe*. It is packaged in French but can still be swapped to English after launch in "Affichage/Switch language".
+2. Download and use the executable *SigAnto_v1.05.exe* (from 30/12/2024 code).
+It is packaged in French but can still be swapped to English after launch in "Affichage/Switch language".
 <br>
 You can also easily package it yourself to share it to people unfamiliar with command line use : <br>
 I would recommend the following pyinstaller command (having previously set up a virtual env with the files in this repo and only the required libraries), which would provide you with a directory containing an executable.
@@ -73,7 +74,7 @@ The --noconsole argument with pyinstaller removes the console, which is not nece
 Packaging with Nuitka instead might lighten the size of the package and improve performance as well, but its ease of use is dependant upon OS, C compiler, python version... so I wouldn't recommend it unless you know what you are getting into.<br>
 
 The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib so there should be no need to change you python environment if it is >3.8.<br>
-The scipy dependency is responsible for roughly half the size of the app, so I'll remove that at some point by coding some of those functions myself. Matplotlib & Numpy will stay though.
+The Scipy dependency is responsible for roughly half the size of the packaged app, so I might make the effort to remove that at some point by coding some of those functions myself... but this is a not unsignificant effort that I am not sure would be worth it since Scipy should be considered a safe standard almost everywhere. Matplotlib & Numpy will most definitely stay.
 
 ### Examples :
 - Spectrogram of a FSK17 signal <br>
@@ -93,6 +94,15 @@ The scipy dependency is responsible for roughly half the size of the app, so I'l
 
 ### Supported Hardware :
 None ! As previously stated, this tool has no real-time applications.
+
+### Changelog :
+- 30/12/2024 : <br>
+Fixed language output in the console, now correctly dependent on language choice in the GUI.<br>
+Executable *SigAnto_v1.05.exe* available.
+<br>
+- 07/01/2025 : <br>
+Added option to choose the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top.
+<br>
 
 ### Useful resources :
 - Information on signals and some example .wav files available : <br>

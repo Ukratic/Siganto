@@ -2,7 +2,7 @@
 Fonctions pour estimer les paramètres de modulation d'un signal IQ.
 - Fonctions de base pour filtrer, sous-échantillonner, sur-échantillonner, mesurer la largeur de bande
 - Fonctions pour mesurer la rapidité de modulation, la phase, l'autocorrelation
-- Fonctions pour mesurer les paramètres de modulation OFDM : ## Auteur : FX Socheleau - IMT Atlantique, 2020 ##
+- Fonctions pour mesurer les paramètres de modulation OFDM : ## Auteur (code matlab adapté ici en python) : FX Socheleau - IMT Atlantique, 2020 ##
 """
 
 import numpy as np
@@ -76,12 +76,33 @@ def compute_spectrogram(iq_wave, frame_rate, N):
     for i in range(num_rows):
         segment = iq_wave[i * N:(i + 1) * N]
         fft_result = np.fft.fftshift(np.fft.fft(segment))
-        spectrogram[i, :] = 10 * np.log10(np.abs(fft_result)**2)
+        spectrogram[i, :] = 10 * np.log10(np.abs(fft_result))
     # Bins fréquence et temps
     freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1/frame_rate))
     times = np.arange(num_rows) * (N / frame_rate)
     
     return freqs, times, spectrogram
+
+# Flattop window
+def flattop_window(N):
+    if N < 1:
+        return np.array([])
+    
+    # Coefficients pour la fenêtre Flattop (source : implémentation Octave de flattop Harris)
+    a0 = 1.0
+    a1 = 1.93
+    a2 = 1.29
+    a3 = 0.388
+    a4 = 0.0322
+
+    n = np.arange(0, N)
+    term0 = a0
+    term1 = -a1 * np.cos(2 * np.pi * n / (N - 1))
+    term2 = a2 * np.cos(4 * np.pi * n / (N - 1))
+    term3 = -a3 * np.cos(6 * np.pi * n / (N - 1))
+    term4 = a4 * np.cos(8 * np.pi * n / (N - 1))
+
+    return term0 + term1 + term2 + term3 + term4
 
 # STFT
 def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
@@ -93,8 +114,16 @@ def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
         window = np.hanning(window_size)
     elif window_func == 'hamming':
         window = np.hamming(window_size)
+    elif window_func == 'blackman':
+        window = np.blackman(window_size)
+    elif window_func == 'kaiser':
+        window = np.kaiser(window_size, beta=14)
+    elif window_func == 'bartlett':
+        window = np.bartlett(window_size) 
+    elif window_func == 'flattop':
+        window = flattop_window(window_size)
     else:
-        raise ValueError("Fenêtre non supportée") # ajouter peut-être plus tard Bartlett, etc...
+        raise ValueError("Fenêtre non supportée") 
     # Output arrays
     stft_matrix = []
     times = []

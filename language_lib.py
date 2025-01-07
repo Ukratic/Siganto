@@ -117,6 +117,7 @@ def get_fra_lib():
         "time_amp": "Temps/Amplitude",
         "persist_spectrum": "Spectre de persistance",
         "spectrogram": "Spectrogramme",
+        "stft": "STFT",
         "smoothing": "Lissage",
         "num_ssp": "Nombre de sous-porteuses",
         "estim_bw": "Estimation de la bande passante :",
@@ -127,8 +128,10 @@ def get_fra_lib():
         "save_wav" : "Sauvegarder modifications (nouveau .wav)",
         "estim_peaks" : "Ecart (abs) entre deux pics de puissance :",
         "peak_find" : "Pic proche curseur",
-        "hann_window" : "Fenêtre de Hann",
+        "window" : "Fenêtre :",
         "f_resol" : "Résolution en fréquence :",
+        "set_window" : "Définir la fonction de fenêtrage",
+        "window_choice" : "Choix de la fonction de fenêtrage :",
     
     }
     return fra_lib
@@ -250,6 +253,7 @@ def get_eng_lib():
         "time_amp": "Time/Amplitude",
         "persist_spectrum": "Persistence Spectrum",
         "spectrogram": "Spectrogram",
+        "stft": "STFT",
         "smoothing": "Smoothing",
         "num_ssp": "Number of subcarriers",
         "estim_bw": "Bandwidth estimation :",
@@ -260,8 +264,10 @@ def get_eng_lib():
         "save_wav" :"Save signal modifications (new .wav)",
         "estim_peaks" : "Gap (abs) between 2 power peaks :",
         "peak_find" : "Peak near cursor",
-        "hann_window" : "Hann Window",
+        "window" : "Window :",
         "f_resol" : "Frequency resolution :",
+        "set_window" : "Set window function",
+        "window_choice" : "Window function choice :",
 
     }
     return eng_lib

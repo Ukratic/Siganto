@@ -64,6 +64,7 @@ toolbar = None # toolbar matplotlib
 diff_window = 0 # fenêtre de lissage des transitions
 hist_bins = 250 # bins pour les histogrammes
 persistance_bins = 50 # bins pour le spectre de persistance
+window_choice = "hann" # fenêtre par défaut pour STFT
 # Variables pour curseurs, lignes, et on/off
 cursor_points = []
 cursor_lines = []
@@ -173,12 +174,10 @@ def plot_initial_graphs():
     if not filepath:
         print(lang["no_file"])
         return
-    num_rows = len(iq_wave) // N
-    spectrogram = np.zeros((num_rows, N))
-    for i in range(num_rows):
-        spectrogram[i,:] = 10*np.log10(np.abs(np.fft.fftshift(np.fft.fft(iq_wave[i*N:(i+1)*N])))**2)
+    freqs, times, spectrogram = em.compute_spectrogram(iq_wave, frame_rate, N)
     ax[0].imshow(spectrogram, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0], cmap='jet')
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
+    ax[0].set_title("Cooley-Tukey FFT")
 
     # DSP
     freqs, dsp = em.compute_dsp(iq_wave, frame_rate, N)
@@ -192,7 +191,7 @@ def plot_initial_graphs():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     # del var pour libérer la mémoire
-    del spectrogram, canvas, spec, a0, a1, num_rows, i
+    del spectrogram, canvas, spec, a0, a1, freqs, times, dsp
 
 # Taille de fenêtre FFT
 def define_N():
@@ -204,12 +203,12 @@ def define_N():
         return
     N = (int(N/2))*2 # N doit être pair
     print(lang["fft_window"], N)
-    plot_initial_graphs()
+    spectrogramme_seul()
     display_file_info()
 
 # Autres graphes de base
 def plot_other_graphs():
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, window_choice
     # Figure avec 3 sous-graphes. Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
     clear_plot()
     fig= plt.figure()
@@ -225,11 +224,11 @@ def plot_other_graphs():
         print(lang["no_file"])
         return
     # STFT
-    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=N//2, window_func='hann')
+    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=N//2, window_func=window_choice)
     ax[0].imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0],cmap=cm.jet)
     ax[0].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
-    ax[0].set_title(lang["hann_window"])
+    ax[0].set_title(f"{lang['window']} {window_choice}")
 
     # Constellation plot
     ax[1].scatter(np.real(iq_wave), np.imag(iq_wave), s=1)
@@ -251,6 +250,33 @@ def plot_other_graphs():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     del stft_matrix, canvas, spec, a0, a1, a2, f, wav_mag
+
+def set_window():
+    global window_choice
+    #dropdown pour choisir la fenêtre
+    popup = tk.Toplevel()
+    popup.title(lang["window_choice"])
+    popup.geometry("300x200")
+    window_list = tk.StringVar()
+    window_list.set(window_choice)
+    tk.Radiobutton(popup, text="Hann", variable=window_list, value="hann").pack()
+    tk.Radiobutton(popup, text="Kaiser", variable=window_list, value="kaiser").pack()
+    tk.Radiobutton(popup, text="Hamming", variable=window_list, value="hamming").pack()
+    tk.Radiobutton(popup, text="Blackman", variable=window_list, value="blackman").pack()
+    tk.Radiobutton(popup, text="Bartlett", variable=window_list, value="bartlett").pack()
+    tk.Radiobutton(popup, text="Flat Top", variable=window_list, value="flattop").pack()
+    tk.Button(popup, text="OK", command=popup.destroy).pack()
+    popup.grab_set()
+    popup.wait_window()
+    window_choice = window_list.get()
+
+    if window_choice is None or window_choice == "":
+        window_choice = "hann"
+        if debug is True:
+            print("Pas de fenêtre définie pour la STFT")
+        return
+    print("Fenêtre définie pour la STFT: ", window_choice)
+    stft_seul()
 
 def plot_3d_spectrogram():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
@@ -372,6 +398,7 @@ def spectrogramme_seul():
     ax.imshow(spectrogram, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0], cmap='jet')
     ax.set_ylabel(f"{lang['time_xy']} [s]")
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
+    ax.set_title("Cooley-Tukey FFT")
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -379,6 +406,31 @@ def spectrogramme_seul():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     del spectrogram, canvas, num_rows, i
+
+def stft_seul():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    # STFT seul
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["stft"])
+    print(lang["stft"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+
+    ax = plt.subplot()
+    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=N//2, window_func=window_choice)
+    ax.imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0],cmap=cm.jet)
+    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
+    ax.set_ylabel(f"{lang['time_xy']} [s]")
+    ax.set_title(f"{lang['window']} {window_choice}")
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del stft_matrix, canvas, freqs, times
 
 # Affichage infos supplémentaires
 def display_frq_info():
@@ -1237,13 +1289,14 @@ def load_lang_changes():
     graphs_menu.add_command(label=lang["group_stft"], command=plot_other_graphs)
     graphs_menu.add_command(label=lang["spec_3d"], command=plot_3d_spectrogram)
     # Ajouter des infos sur le signal
-    info_menu.add_command(label=lang["fft_size"], command=define_N)
     info_menu.add_command(label=lang["frq_info"], command=display_frq_info)
     # Changer langue. Label "English" si langue = fr, "Français" si langue = en
     lang_switch = "Switch language: English" if lang['lang'] == "Français" else "Changer langue: Français"
     info_menu.add_command(label=lang_switch, command=change_lang)
     info_menu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
     info_menu.add_command(label=lang["param_spectre_persistance"], command=param_spectre_persistance)
+    info_menu.add_command(label=lang["fft_size"], command=define_N)
+    info_menu.add_command(label=lang["set_window"], command=set_window)
     # Modifications du signal
     mod_menu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
     mod_menu.add_command(label=lang["filter_band"], command=apply_filter_band)
@@ -1268,6 +1321,7 @@ def load_lang_changes():
     diff_menu.add_command(label=lang["distrib_phase"], command=phase_cumulative)
     # Temps
     time_menu.add_command(label=lang["spectrogram"], command=spectrogramme_seul)
+    time_menu.add_command(label=lang["stft"], command=stft_seul)
     time_menu.add_command(label=lang["time_amp"], command=time_amplitude)
     time_menu.add_command(label=lang["persist_spectrum"], command=spectre_persistance)
     time_menu.add_command(label=lang["diff_phase"], command=phase_difference)
