@@ -14,6 +14,8 @@ Many thanks to Dr Marc Lichtman - University of Maryland. Author of PySDR.
 import tkinter as tk
 from threading import Thread, Event
 
+# Initialisation : chargement des librairies et de la langue dans une fonction pour pouvoir l'intégrer dans un thread
+# Ce thread permet de charger les librairies en arrière-plan avec une fenêtre de chargement, en attendant que tout soit prêt
 loading_end = Event()
 def loading_libs():
     # Librairies
@@ -82,6 +84,7 @@ plot_frame.pack(fill=tk.BOTH, expand=True)
 
 # Fonctions de chargement de fichier WAV
 def find_sample_width(file_path):
+    # Fonc de détermination d'encodage WAV
     with open(file_path,'rb') as wav_file:
         header = wav_file.read(44) # Premiers 44 bytes = réservés header
         if header[:4] != b'RIFF' or header[8:12] != b'WAVE' or header[12:16] != b'fmt ': # vérifie si c'est un fichier WAV
@@ -108,12 +111,23 @@ def load_wav():
         n_bits = np.int64
     else:   
         n_bits = np.int32
+        if debug is True:
+            print("Encodage inconnu. Utilisation de l'encodage 32 bits par défaut")
 
-    if N is None:
-        N = 512
     frame_rate, s_wave = wav.read(filepath)
     iq_wave = np.frombuffer(s_wave, dtype=n_bits)  
     left, right = iq_wave[0::2], iq_wave[1::2]
+
+    if len(iq_wave) > 1e6: # si plus d'un million d'échantillons
+        N = 4096
+    elif len(iq_wave) < frame_rate: # si moins d'une seconde
+        N = (len(iq_wave)//25)*(len(iq_wave)/frame_rate) # résolution de 25 Hz par défaut, voire moins si largement inférieur à 1 seconde
+        N = (int(N/2))*2 # N pair de préférence
+        if N < 4: # minimum 4 échantillons
+            N = 4
+    else:
+        N = 512 # taille de fenêtre FFT par défaut
+
     try:
         iq_wave = left + 1j * right  # signal IQ complexe
     except:
@@ -125,7 +139,7 @@ def load_wav():
     # Plot graphes initiaux après chargement du fichier
     plot_initial_graphs()
 
-# fonc nettoyage graphe
+# fonc de nettoyage graphe
 def clear_plot():
     try:
         if cursor_mode:
@@ -193,7 +207,7 @@ def plot_initial_graphs():
     # del var pour libérer la mémoire
     del spectrogram, canvas, spec, a0, a1, freqs, times, dsp
 
-# Taille de fenêtre FFT
+# Fonc pour changer la taille de fenêtre FFT
 def define_N():
     global N
     N = int(tk.simpledialog.askstring("N", lang["define_n"]))
@@ -206,7 +220,7 @@ def define_N():
     spectrogramme_seul()
     display_file_info()
 
-# Autres graphes de base
+# Autres groupe de graphes de base
 def plot_other_graphs():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, window_choice
     # Figure avec 3 sous-graphes. Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
@@ -230,7 +244,7 @@ def plot_other_graphs():
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
     ax[0].set_title(f"{lang['window']} {window_choice}")
 
-    # Constellation plot
+    # Constellation
     ax[1].scatter(np.real(iq_wave), np.imag(iq_wave), s=1)
     ax[1].set_xlabel("In-Phase")
     ax[1].set_ylabel("Quadrature")
@@ -251,6 +265,7 @@ def plot_other_graphs():
     canvas.draw()
     del stft_matrix, canvas, spec, a0, a1, a2, f, wav_mag
 
+# Fonc de changement de fenêtre FFT pour STFT
 def set_window():
     global window_choice
     #dropdown pour choisir la fenêtre
@@ -278,6 +293,7 @@ def set_window():
     print("Fenêtre définie pour la STFT: ", window_choice)
     stft_seul()
 
+# Fonc du spectrogramme 3D
 def plot_3d_spectrogram():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     # 3D
@@ -289,6 +305,7 @@ def plot_3d_spectrogram():
         print(lang["no_file"])
         return
     
+    # Génération du spectrogramme 3D en utilisant la même fonction que pour le spectrogramme classique
     freqs, times, spectrogram = em.compute_spectrogram(iq_wave, frame_rate, N)
     X, Y = np.meshgrid(freqs, times)
     ax = plt.subplot(projection='3d')
@@ -331,7 +348,7 @@ def time_amplitude():
 
 def spectre_persistance():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    # Spectre de persistance
+    # Spectre de persistance : carte de chaleur de la persistance sur le spectre
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["persist_spectrum"])
@@ -340,7 +357,7 @@ def spectre_persistance():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    f, min_power, max_power, persistence = em.persistance_spectrum(iq_wave, frame_rate, N)
+    f, min_power, max_power, persistence = em.persistance_spectrum(iq_wave, frame_rate, N, persistance_bins)
     ax.imshow(persistence.T, aspect='auto', extent=[f[0], f[-1], min_power, max_power], origin='lower', cmap='jet')
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel("Amplitude")
@@ -353,6 +370,7 @@ def spectre_persistance():
     canvas.draw()
     del canvas, f, min_power, max_power, persistence
 
+# paramètres pour le spectre de persistance : nombre de bins
 def param_spectre_persistance():
     global persistance_bins
     persistance_bins = int(tk.simpledialog.askstring(lang["params"], lang["pers_bins"]))
@@ -366,7 +384,7 @@ def param_spectre_persistance():
         print("Nombre de bins pour le spectre de persistance défini à ", persistance_bins)
     spectre_persistance()
 
-# params pour les fonctions de différence de phase et de fréquence
+# params pour les fonctions de transitions de phase et de fréquence : lissage optionnel
 def set_diff_params():
     global diff_window
     diff_window = tk.simpledialog.askstring(lang["params"], lang["smoothing_val"])
@@ -382,7 +400,7 @@ def set_diff_params():
 
 def spectrogramme_seul():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    # Spectrogramme seul
+    # Spectrogramme seul (hors groupe)
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["spectrogram"])
@@ -409,7 +427,7 @@ def spectrogramme_seul():
 
 def stft_seul():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    # STFT seul
+    # STFT seul (hors groupe)
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["stft"])
@@ -432,7 +450,7 @@ def stft_seul():
     canvas.draw()
     del stft_matrix, canvas, freqs, times
 
-# Affichage infos supplémentaires
+# Affichage infos supplémentaires sur le signal : Mesures de puissance. Estimations de largeur de bande, rapidité de modulation & ACF.
 def display_frq_info():
     print(lang["frq_info"])
     if iq_wave is None :
@@ -473,6 +491,7 @@ def display_frq_info():
         print("Rapidité de modulation avec la FFT de puissance classique: ", estim_speed_2, " Bauds")
         print("Autocorrélation estimée: ", acf_peak, " ms")
 
+# Affichage des informations du fichier : nom, encodage, durée, fréquence d'échantillonnage, taille de la fenêtre FFT
 def display_file_info():
     if filepath is None:
         info_label.config(text=lang["no_file"])
@@ -489,8 +508,9 @@ def display_file_info():
         print("Durée: ", len(iq_wave)/frame_rate, " secondes")
         print("Taille fenêtre FFT: ", N)
 
-# Fonctions de traitement du signal
+# Fonctions de traitement du signal (filtres, déplacement de fréquence, sous-échantillonnage, sur-échantillonnage, coupure)
 def move_frequency():
+    # déplacement de la fréquence centrale (valeur entrée par l'utilisateur)
     global iq_wave, frame_rate
     fcenter = float(tk.simpledialog.askstring(lang["fc"], lang["move_txt"]))
     if fcenter is None:
@@ -515,6 +535,7 @@ def move_frequency_cursors():
     plot_initial_graphs()
 
 def apply_filter_high_low():
+    # passage d'un filtre passe-haut ou passe-bas
     global iq_wave, frame_rate
     popup = tk.Toplevel()
     popup.title(lang["high_low"])
@@ -542,6 +563,7 @@ def apply_filter_high_low():
     plot_initial_graphs()
 
 def apply_filter_band():
+    # passage d'un filtre passe-bande
     global iq_wave, frame_rate
     popup = tk.Toplevel()
     popup.title(lang["bandpass"])
@@ -564,6 +586,7 @@ def apply_filter_band():
     plot_initial_graphs()
 
 def mean_filter():
+    # filtre moyenneur
     global iq_wave
     # popup pour choisir entre appliquer ou définir le seuil
     popup = tk.Toplevel()
@@ -597,6 +620,7 @@ def mean_filter():
     plot_initial_graphs()
 
 def downsample_signal():
+    # sous-échantillonnage
     global iq_wave, frame_rate
     rate = tk.simpledialog.askstring(lang["downsample"], lang["down_value"])
     if rate is None:
@@ -610,6 +634,7 @@ def downsample_signal():
     display_file_info()
 
 def upsample_signal():
+    # sur-échantillonnage
     global iq_wave, frame_rate
     rate = tk.simpledialog.askstring(lang["upsample"], lang["up_value"])
     if rate is None:
@@ -623,6 +648,7 @@ def upsample_signal():
     display_file_info()
 
 def cut_signal():
+    # coupure du signal : entrer les points de début et de fin (en secondes)
     global iq_wave, frame_rate
     popup = tk.Toplevel()
     popup.title(lang["cut"])
@@ -654,6 +680,7 @@ def cut_signal():
     display_file_info()
 
 def cut_signal_cursors():
+    # coupure du signal entre les 2 curseurs (ne prend en compte que la durée, pas l'écart en fréquence)
     global iq_wave, frame_rate, cursor_points
     if len(cursor_points) < 2:
         tk.messagebox.showinfo(lang["error"], lang["2pt_cursors"])
@@ -677,6 +704,7 @@ def cut_signal_cursors():
 
 # Fonctions de mesure de la rapidité de modulation
 def psf():
+    # Mesure de la rapidité de modulation par la FFT de puissance. Polyvalente.
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -703,6 +731,7 @@ def psf():
     del clock, f, peak_freq, canvas
 
 def mts():
+    # Variation de la fonction précédente, plus efficace sur certains signaux. En général performant sur les signaux de modulation de phase
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -732,6 +761,7 @@ def mts():
     del clock, f, peak_freq, canvas
 
 def pseries():
+    # mesure de la rapidité de modulation par la série de puissance, efficace sur les signaux de modulation d'amplitude et de fréquence
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -768,6 +798,7 @@ def pseries():
     del f, squared, quartic, canvas
 
 def dsp():
+    # affichage de la densité spectrale de puissance et de la bande passante estimée
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     print(lang["dsp"])
     print(lang["bandwidth"])
@@ -795,6 +826,7 @@ def dsp():
     del bw, fmax, fmin, canvas, f, Pxx
 
 def constellation():
+    # affichage de la constellation du signal. Fortement dépendant d'un bon calibrage de la fréquence centrale
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -817,6 +849,7 @@ def constellation():
 
 # Fonctions d'autocorrélation
 def autocorr():
+    # Autocorrélation du signal sur la FFT : rapide, mais moins précis. En général, satisfaisant
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -844,6 +877,7 @@ def autocorr():
     del yx, lags, canvas
 
 def autocorr_full():
+    # Autocorrélation complète du signal : plus précis, mais plus lent
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -870,7 +904,7 @@ def autocorr_full():
     canvas.draw()
     del yx, lags, canvas
 
-# Fonctions de mesures de phase
+# Fonctions de mesures de transitions de phase et de fréquence
 def phase_difference():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, diff_window
     clear_plot()
@@ -920,6 +954,7 @@ def freq_difference():
     del time, freq_diff, canvas
 
 def phase_cumulative():
+    # fonc expérimentale de distribution cumulative de phase. A évaluer/améliorer
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -929,7 +964,7 @@ def phase_cumulative():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    hist, bins = em.phase_cumulative_distribution(iq_wave)
+    hist, bins = em.phase_cumulative_distribution(iq_wave, num_bins=1000)
     ax.plot(bins, hist)
     ax.set_xlabel("Phase [rad]")
     ax.set_ylabel(lang["density"])
@@ -1082,13 +1117,14 @@ def ofdm_results():
     canvas.draw()
     del bw, fmax, fmin, f, Pxx, alpha_0, popup, canvas
 
-# Fonctions de gestion des curseurs
+## Fonctions de gestion des curseurs
 # Calcule distance entre 2 points
 def calculate_distance(p1, p2):
     dx = p2[0] - p1[0]
     dy = p2[1] - p1[1]
     return np.sqrt(dx**2 + dy**2), dx, dy
 
+# Cherche les pics dans les données
 def find_peaks(data):
     peaks = []
     for i in range(1, len(data) - 1):
@@ -1096,12 +1132,14 @@ def find_peaks(data):
             peaks.append(i)
     return peaks
 
+# Récupère les données x,y du graphe actuel
 def get_current_graph_data(ax):
     line = ax.lines[0]  # Les pics à chercher sont sur X et on suppose que c'est sur la 1ere ligne
     x_data = line.get_xdata()
     y_data = line.get_ydata()
     return x_data, y_data
 
+# Déplace le curseur sur le pic le plus proche
 def move_cursor_to_nearest_peak():
     global cursor_points, cursor_lines, distance_text
     if not cursor_points:
@@ -1225,6 +1263,7 @@ def clear_cursors():
     # Redessine
     fig.canvas.draw()
 
+# sauvegarde le signal (modifié ou non) en nouveau fichier wav
 def save_as_wav():
     global iq_wave, frame_rate
     filename = tk.filedialog.asksaveasfilename(title=lang["save_wav"],defaultextension=".wav", filetypes=[("Waveform Audio File", "*.wav"), ("All Files", "*.*")])
@@ -1245,6 +1284,7 @@ def save_as_wav():
     if debug is True:
         print("Ecriture du nouveau wav")
 
+# Fonc de changement de langue. Recharge les labels des boutons et des menus. Couvre FR et EN uniquement
 def change_lang():
     global lang
     # clic : fr -> en, en -> fr

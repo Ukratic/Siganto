@@ -1,9 +1,10 @@
 """
-Fonctions pour estimer les paramètres de modulation d'un signal IQ.
-- Fonctions de base pour filtrer, sous-échantillonner, sur-échantillonner, mesurer la largeur de bande
-- Fonctions pour mesurer la rapidité de modulation, la phase, l'autocorrelation
-- Fonctions pour mesurer les paramètres de modulation OFDM : ## Auteur (code matlab adapté ici en python) : FX Socheleau - IMT Atlantique, 2020 ##
+Functions to estimate modulation parameters of an IQ signal.
+- Basic functions to filter, downsample, upsample, measure bandwidth
+- Functions to measure modulation speed, phase, autocorrelation
+- Functions to measure OFDM modulation parameters : ## Author (matlab code adapted here in python) : FX Socheleau - IMT Atlantique, 2020 ##
 """
+# Comments in French below
 
 import numpy as np
 from scipy.signal import butter, filtfilt, resample
@@ -12,7 +13,7 @@ from scipy.signal import butter, filtfilt, resample
 ##
 
 def bandpass_filter(iq_wave, lowcut, highcut, frame_rate, order=4):
-    # Butterworth bandpass
+    # Filtre passe-bande, basé sur scipy.signal.butter et filtfilt
     nyquist = frame_rate / 2
     low = lowcut / nyquist
     high = highcut / nyquist
@@ -22,6 +23,7 @@ def bandpass_filter(iq_wave, lowcut, highcut, frame_rate, order=4):
     return filtered_signal
 
 def lowpass_filter(iq_wave, highcut, frame_rate, order=4):
+    # Filtre passe-bas, basé sur scipy.signal.butter et filtfilt
     nyquist = frame_rate / 2
     if not (0 < highcut < nyquist):
         raise ValueError("Fréquence de coupure doit être entre 0 et la fréquence de Nyquist.")
@@ -32,6 +34,7 @@ def lowpass_filter(iq_wave, highcut, frame_rate, order=4):
     return filtered_signal
 
 def highpass_filter(iq_wave, lowcut, frame_rate, order=4):
+    # Filtre passe-haut, basé sur scipy.signal.butter et filtfilt
     nyquist = frame_rate / 2
     if not (0 < lowcut < nyquist):
         raise ValueError("Fréquence de coupure doit être entre 0 et la fréquence de Nyquist.")
@@ -42,6 +45,7 @@ def highpass_filter(iq_wave, lowcut, frame_rate, order=4):
     return filtered_signal
 
 def downsample(iq_wave, frame_rate, decimation_factor):
+    # Sous-échantillonnage par slicing
     # facteur de décimation
     decimation_factor = int(decimation_factor)
     if decimation_factor < 1:
@@ -55,13 +59,13 @@ def downsample(iq_wave, frame_rate, decimation_factor):
     return downsampled_signal, new_frame_rate
 
 def upsample(iq_wave, frame_rate, oversampling_factor):
+    # Suréchantillonnage, basé sur scipy.signal.resample
     # facteur de suréchantillonnage
     oversampling_factor = int(oversampling_factor)
     if oversampling_factor < 1:
         raise ValueError("Le facteur de suréchantillonnage doit être un entier positif.")
     if oversampling_factor == 1:
         return iq_wave, frame_rate
-    # Suréchantillonnage avec scipy.signal.resample
     upsampled_signal = resample(iq_wave, len(iq_wave) * oversampling_factor)
     new_frame_rate = int(frame_rate * oversampling_factor)
 
@@ -69,6 +73,7 @@ def upsample(iq_wave, frame_rate, oversampling_factor):
 
 # Spectrogramme
 def compute_spectrogram(iq_wave, frame_rate, N):
+    # Spectrogramme basé sur la FFT Cooley-Tukey (numpy.fft), cf PyDSP (Dr M. Lichtman)
     # Calcule nb de lignes pour la matrice
     num_rows = len(iq_wave) // N
     spectrogram = np.zeros((num_rows, N))
@@ -88,7 +93,7 @@ def flattop_window(N):
     if N < 1:
         return np.array([])
     
-    # Coefficients pour la fenêtre Flattop (source : implémentation Octave de flattop Harris)
+    # Coefficients pour la fenêtre Flattop (source : implémentation Octave de Flattop Harris)
     a0 = 1.0
     a1 = 1.93
     a2 = 1.29
@@ -363,6 +368,8 @@ def full_autocorrelation(iq_wave):
 
 ##
 # OFDM
+# Fonctions pour estimer les paramètres de modulation OFDM, basés sur le code Matlab de FX Socheleau - IMT Atlantique, 2020
+# Cours "Analyse aveugle de signaux de communication" - Telecom Paris 2024
 ##
 
 def estimate_ofdm_symbol_duration(iq_wave, frame_rate, min_distance=1):
@@ -377,12 +384,13 @@ def estimate_ofdm_symbol_duration(iq_wave, frame_rate, min_distance=1):
     return peak_value, lag_time_ms
 
 def estimate_alpha(iq_wave, frame_rate, estimated_ofdm_symbol_duration):
+    # estime écart de fréquence alpha à partir de la CAF
     index_delay  = round(estimated_ofdm_symbol_duration*1e-3*frame_rate) # delay index
     conj = iq_wave[0:-index_delay]*np.conj(iq_wave[index_delay:])
     caf = np.fft.fftshift(np.fft.fft(conj))
     len_caf = len(caf)
     alpha = (-1/2 + np.arange(len_caf)/len_caf)*frame_rate
-    # trouver le pic de la CAF pour estimer alpha peak, en ignorant le pic à 0
+    # trouver automatiquement le pic de la CAF pour estimer le pic alpha, en ignorant le pic à 0
     discard_dc = np.abs(caf)
     zero_index = np.abs(alpha).argmin()
     discard_dc[zero_index-10:zero_index+10] = 0

@@ -21,7 +21,7 @@ The repository also contains 2 scripts to convert mp3 and SigMF files into wav, 
 #### 1. Display
 - Load a .wav file. The button reloads the same file if clicked again. Select the button next to it to close the .wav file before loading another.
 - Activate measuring cursors (deactivated by default upon loading a new graph). Distance between 2 cursors is shown and you can also jump to a nearby peak.
-- Change FFT window size (default 512)
+- Change FFT window size (default 512) or window function (Tukey, Kaiser, Hann, Hamming, Blackman, Bartlett, Flattop)
 - Change language (english and french available)
 - Display frequency & power information of the signal file (Estimated BW, dB level, symbol rate & ACF)
 - Modify parameters for transition (phase, frequency) & persistence graphs
@@ -33,7 +33,7 @@ The repository also contains 2 scripts to convert mp3 and SigMF files into wav, 
 - Cut part of the signal in time (enter a value or by cursor selection)
 - Save as a new .wav file
 #### 3. Time Metrics
-- Spectrogram (several variants, including 3D. STFT in Hann window : more options in future versions)
+- Spectrogram (Tukey, 3D, STFT with various windows)
 - Time/Amplitude
 - Persistence Spectrum
 - Phase Transitions
@@ -96,13 +96,16 @@ The Scipy dependency is responsible for roughly half the size of the packaged ap
 None ! As previously stated, this tool has no real-time applications.
 
 ### Changelog :
-- 30/12/2024 : <br>
+- December 2024 : <br>
+First upload on github<br>
+<br>
 Fixed language output in the console, now correctly dependent on language choice in the GUI.<br>
 Executable *SigAnto_v1.05.exe* available.
-<br>
-- 07/01/2025 : <br>
-Added option to choose the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top.
-<br>
+
+- January 2025 : <br>
+Added option to choose the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top.<br>
+Added dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal.<br>
+
 
 ### Useful resources :
 - Information on signals and some example .wav files available : <br>
