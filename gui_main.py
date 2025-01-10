@@ -121,9 +121,9 @@ def load_wav():
     if len(iq_wave) > 1e6: # si plus d'un million d'échantillons
         N = 4096
     elif len(iq_wave) < frame_rate: # si moins d'une seconde
-        N = (len(iq_wave)//25)*(len(iq_wave)/frame_rate) # résolution de 25 Hz par défaut, voire moins si largement inférieur à 1 seconde
+        N = (frame_rate//100)*(len(iq_wave)/frame_rate) # résolution de 100 Hz par défaut, moins proportionnellement à la durée si inférieur à 1 seconde
         N = (int(N/2))*2 # N pair de préférence
-        if N < 4: # minimum 4 échantillons
+        if N < 4: # taille minimum de 4 échantillons
             N = 4
     else:
         N = 512 # taille de fenêtre FFT par défaut
