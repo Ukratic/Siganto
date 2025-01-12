@@ -24,8 +24,8 @@ def get_fra_lib():
         "main_viz": "Visualisation Principale",
         "group_spec": "Groupe: Spectrogramme et DSP",
         "spec_dsp": "Spectrogramme et DSP",
-        "group_stft": "Groupe: STFT, Constellation, DSP max",
-        "spec_stft": "STFT, Constellation, DSP max",
+        "group_const": "Groupe: Spectrogramme, Constellation, DSP max",
+        "spec_const": "Spectrogramme, Constellation, DSP max",
         "spec_3d": "Spectrogramme 3D",
         "display": "Affichage",
         "frq_info": "Informations de fréquence/puissance",
@@ -117,7 +117,6 @@ def get_fra_lib():
         "time_amp": "Temps/Amplitude",
         "persist_spectrum": "Spectre de persistance",
         "spectrogram": "Spectrogramme",
-        "stft": "STFT",
         "smoothing": "Lissage",
         "num_ssp": "Nombre de sous-porteuses",
         "estim_bw": "Estimation de la bande passante :",
@@ -132,6 +131,10 @@ def get_fra_lib():
         "f_resol" : "Résolution en fréquence :",
         "set_window" : "Définir la fonction de fenêtrage",
         "window_choice" : "Choix de la fonction de fenêtrage :",
+        "overlap_val" : "Valeur de recouvrement (taille de fenêtre//X) :",
+        "set_overlap" : "Définir la valeur de recouvrement",
+        "dsp_max" : "DSP max",
+        "error_stft" : "Erreur dans le calcul de la STFT. Essayez une autre taille de fenêtre et/ou fonction.",
     
     }
     return fra_lib
@@ -161,8 +164,8 @@ def get_eng_lib():
         "main_viz": "Main Graphs",
         "group_spec": "Group: Spectrogram and PSD",
         "spec_dsp": "Spectrogram and PSD",
-        "group_stft": "Group: STFT, Constellation, PSD max",
-        "spec_stft": "STFT, Constellation, PSD max",
+        "group_const": "Group: Spectrogram, Constellation, PSD max",
+        "spec_const": "Spectrogram, Constellation, PSD max",
         "spec_3d": "3D Spectrogram",
         "display": "Display",
         "frq_info": "Frequency/Power Information",
@@ -253,7 +256,6 @@ def get_eng_lib():
         "time_amp": "Time/Amplitude",
         "persist_spectrum": "Persistence Spectrum",
         "spectrogram": "Spectrogram",
-        "stft": "STFT",
         "smoothing": "Smoothing",
         "num_ssp": "Number of subcarriers",
         "estim_bw": "Bandwidth estimation :",
@@ -268,6 +270,10 @@ def get_eng_lib():
         "f_resol" : "Frequency resolution :",
         "set_window" : "Set window function",
         "window_choice" : "Window function choice :",
+        "overlap_val" : "Overlap value (window size//X) :",
+        "set_overlap" : "Set overlap value",
+        "dsp_max" : "Max PSD",
+        "error_stft" : "Error in STFT computation. Try another window size and/or function.",
 
     }
     return eng_lib

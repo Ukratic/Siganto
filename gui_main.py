@@ -61,12 +61,13 @@ print("Chargement des fonctions...")
 filepath = None
 frame_rate = None
 iq_wave = None
-N = None # taille de la fenêtre FFT par défaut (512)
+N = 512 # taille de la fenêtre FFT par défaut
+overlap = N//4 # recouvrement par défaut pour la STFT
 toolbar = None # toolbar matplotlib
 diff_window = 0 # fenêtre de lissage des transitions
 hist_bins = 250 # bins pour les histogrammes
 persistance_bins = 50 # bins pour le spectre de persistance
-window_choice = "hann" # fenêtre par défaut pour STFT
+window_choice = "hamming" # fenêtre par défaut pour STFT
 # Variables pour curseurs, lignes, et on/off
 cursor_points = []
 cursor_lines = []
@@ -121,7 +122,7 @@ def load_wav():
     if len(iq_wave) > 1e6: # si plus d'un million d'échantillons
         N = 4096
     elif len(iq_wave) < frame_rate: # si moins d'une seconde
-        N = (frame_rate//100)*(len(iq_wave)/frame_rate) # résolution de 100 Hz par défaut, moins proportionnellement à la durée si inférieur à 1 seconde
+        N = (frame_rate//50)*(len(iq_wave)/frame_rate) # résolution de 50 Hz par défaut, plus proportionnellement à la durée si inférieur à 1 seconde
         N = (int(N/2))*2 # N pair de préférence
         if N < 4: # taille minimum de 4 échantillons
             N = 4
@@ -188,16 +189,36 @@ def plot_initial_graphs():
     if not filepath:
         print(lang["no_file"])
         return
-    freqs, times, spectrogram = em.compute_spectrogram(iq_wave, frame_rate, N)
-    ax[0].imshow(spectrogram, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0], cmap='jet')
+    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    if freqs is None:
+        print(lang["error_stft"])
+        # message d'erreur si la STFT n'a pas pu être calculée
+        tk.messagebox.showerror(lang["error"], lang["error_stft"])
+        return
+    ax[0].imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0], cmap='jet')
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
-    ax[0].set_title("Cooley-Tukey FFT")
+    ax[0].set_title(f"{lang['window']} {window_choice}")
 
     # DSP
-    freqs, dsp = em.compute_dsp(iq_wave, frame_rate, N)
-    ax[1].plot(freqs, 20*np.log10(dsp))
+    bw, fmin, fmax, f, Pxx = em.estimate_bandwidth(iq_wave, frame_rate, N)
+    line, = ax[1].plot(f, Pxx)
+    # Suppression du segment le plus long qui affiche une ligne inutile
+    # Cherche le plus long segment
+    distances = np.sqrt(np.diff(f)**2 + np.diff(Pxx)**2)
+    longest_segment_index = np.argmax(distances)
+    # Coordonnées du segment le plus long
+    x1, y1 = f[longest_segment_index], Pxx[longest_segment_index]
+    x2, y2 = f[longest_segment_index + 1], Pxx[longest_segment_index + 1]
+    # Retire le segment le plus long du graphe en le remplaçant par une ligne blanche
+    ax[1].plot([x1, x2], [y1, y2], color="white", linewidth=3) # width = 3 pour être sûr de bien couvrir le segment même si la ligne est inclinée
     ax[1].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[1].set_ylabel("Amplitude")
+    ax[1].axvline(x=fmax, color='r', linestyle='--')
+    ax[1].axvline(x=fmin, color='r', linestyle='--')
+    if debug is True:
+        print("Bande passante estimée: ", bw, " Hz")
+        print("Fréquence max BW: ", fmax, " Hz")
+        print("Fréquence min BW: ", fmin, " Hz")
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -205,7 +226,7 @@ def plot_initial_graphs():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     # del var pour libérer la mémoire
-    del spectrogram, canvas, spec, a0, a1, freqs, times, dsp
+    del stft_matrix, canvas, spec, a0, a1, freqs, times, bw, fmin, fmax, f, Pxx, line, distances, longest_segment_index, x1, y1, x2, y2
 
 # Fonc pour changer la taille de fenêtre FFT
 def define_N():
@@ -217,7 +238,7 @@ def define_N():
         return
     N = (int(N/2))*2 # N doit être pair
     print(lang["fft_window"], N)
-    spectrogramme_seul()
+    stft_solo()
     display_file_info()
 
 # Autres groupe de graphes de base
@@ -227,18 +248,18 @@ def plot_other_graphs():
     clear_plot()
     fig= plt.figure()
     spec = fig.add_gridspec(3, 2)
-    fig.suptitle(lang["spec_stft"])
+    fig.suptitle(lang["spec_const"])
     fig.tight_layout()
     a0 = fig.add_subplot(spec[0:2, :])
     a1 = fig.add_subplot(spec[2, 0])
     a2 = fig.add_subplot(spec[2, 1])
     ax = (a0, a1, a2)
-    print(lang["spec_stft"])
+    print(lang["spec_const"])
     if not filepath:
         print(lang["no_file"])
         return
     # STFT
-    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=N//2, window_func=window_choice)
+    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
     ax[0].imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0],cmap=cm.jet)
     ax[0].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
@@ -280,6 +301,7 @@ def set_window():
     tk.Radiobutton(popup, text="Blackman", variable=window_list, value="blackman").pack()
     tk.Radiobutton(popup, text="Bartlett", variable=window_list, value="bartlett").pack()
     tk.Radiobutton(popup, text="Flat Top", variable=window_list, value="flattop").pack()
+    tk.Radiobutton(popup, text="Rectangular", variable=window_list, value="rect").pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.grab_set()
     popup.wait_window()
@@ -291,7 +313,7 @@ def set_window():
             print("Pas de fenêtre définie pour la STFT")
         return
     print("Fenêtre définie pour la STFT: ", window_choice)
-    stft_seul()
+    stft_solo()
 
 # Fonc du spectrogramme 3D
 def plot_3d_spectrogram():
@@ -304,15 +326,15 @@ def plot_3d_spectrogram():
     if not filepath:
         print(lang["no_file"])
         return
-    
-    # Génération du spectrogramme 3D en utilisant la même fonction que pour le spectrogramme classique
-    freqs, times, spectrogram = em.compute_spectrogram(iq_wave, frame_rate, N)
+    # Génération du spectrogramme 3D 
+    freqs, times, spectrogram = em.compute_spectrogram(iq_wave, frame_rate, N, window_func=window_choice)
     X, Y = np.meshgrid(freqs, times)
     ax = plt.subplot(projection='3d')
     ax.plot_surface(X, Y, spectrogram, cmap=cm.coolwarm)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(f"{lang['time_xy']} [s]")
     ax.set_zlabel("Amplitude")
+    ax.set_title(f"{lang['window']} {window_choice}")
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -398,9 +420,22 @@ def set_diff_params():
         print("Fenêtre de lissage des transitions définie à ", diff_window)
     phase_difference()
 
-def spectrogramme_seul():
+def set_overlap():
+    global overlap
+    overlap = tk.simpledialog.askstring(lang["params"], lang["overlap_val"])
+    if overlap is None or overlap == "":
+        overlap = N//4
+        if debug is True:
+            print("Pas de recouvrement défini pour la STFT. Recouvrement par défaut à ", overlap)
+        return
+    overlap = int(overlap)
+    if debug is True:
+        print("Recouvrement défini à ", overlap)
+    stft_solo()
+
+def stft_solo():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    # Spectrogramme seul (hors groupe)
+    # STFT seul (hors groupe)
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["spectrogram"])
@@ -408,36 +443,14 @@ def spectrogramme_seul():
     if not filepath:
         print(lang["no_file"])
         return
+
     ax = plt.subplot()
-    num_rows = len(iq_wave) // N
-    spectrogram = np.zeros((num_rows, N))
-    for i in range(num_rows):
-        spectrogram[i,:] = 10*np.log10(np.abs(np.fft.fftshift(np.fft.fft(iq_wave[i*N:(i+1)*N])))**2)
-    ax.imshow(spectrogram, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0], cmap='jet')
-    ax.set_ylabel(f"{lang['time_xy']} [s]")
-    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_title("Cooley-Tukey FFT")
-
-    canvas = FigureCanvasTkAgg(fig, plot_frame)
-    toolbar = NavigationToolbar2Tk(canvas, root)
-    toolbar.update()
-    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-    canvas.draw()
-    del spectrogram, canvas, num_rows, i
-
-def stft_seul():
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    # STFT seul (hors groupe)
-    clear_plot()
-    fig = plt.figure()
-    fig.suptitle(lang["stft"])
-    print(lang["stft"])
-    if not filepath:
-        print(lang["no_file"])
+    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    if freqs is None:
+        print(lang["error_stft"])
+        # message d'erreur si la STFT n'a pas pu être calculée
+        tk.messagebox.showerror(lang["error"], lang["error_stft"])
         return
-
-    ax = plt.subplot()
-    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=N//2, window_func=window_choice)
     ax.imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0],cmap=cm.jet)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(f"{lang['time_xy']} [s]")
@@ -807,7 +820,16 @@ def dsp():
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
     bw, fmin, fmax, f, Pxx = em.estimate_bandwidth(iq_wave, frame_rate, N)
-    ax.plot(f, Pxx)
+    line, = ax.plot(f, Pxx)
+    # Suppression du segment le plus long qui affiche une ligne inutile
+    # Cherche le plus long segment
+    distances = np.sqrt(np.diff(f)**2 + np.diff(Pxx)**2)
+    longest_segment_index = np.argmax(distances)
+    # Coordonnées du segment le plus long
+    x1, y1 = f[longest_segment_index], Pxx[longest_segment_index]
+    x2, y2 = f[longest_segment_index + 1], Pxx[longest_segment_index + 1]
+    # Retire le segment le plus long du graphe en le remplaçant par une ligne blanche
+    ax.plot([x1, x2], [y1, y2], color="white", linewidth=3) # width = 3 pour être sûr de bien couvrir le segment même si la ligne est inclinée
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel("Amplitude")
     ax.axvline(x=fmax, color='r', linestyle='--')
@@ -823,8 +845,34 @@ def dsp():
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del bw, fmax, fmin, canvas, f, Pxx
+    del bw, fmax, fmin, canvas, f, Pxx, line, distances, longest_segment_index, x1, y1, x2, y2
 
+# fonc dsp max
+def dsp_max():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["dsp_max"])
+    print(lang["dsp_max"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    ax = plt.subplot()
+    wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
+    f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave)) # frq en Hz
+    ax.plot(f, wav_mag)
+    ax.plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # show max
+    ax.grid()
+    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
+    ax.set_ylabel("Amplitude")
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del canvas, wav_mag, f
+    
 def constellation():
     # affichage de la constellation du signal. Fortement dépendant d'un bon calibrage de la fréquence centrale
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
@@ -958,8 +1006,8 @@ def phase_cumulative():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
-    fig.suptitle(f"{lang['distrib_phase']} : {lang['experimental']}")
-    print(f"{lang['distrib_phase']} : {lang['experimental']}")
+    fig.suptitle(f"{lang['distrib_phase']} ")
+    print(f"{lang['distrib_phase']} ")
     if not filepath:
         print(lang["no_file"])
         return
@@ -1101,7 +1149,16 @@ def ofdm_results():
     fig = plt.figure()
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
-    ax.plot(f, Pxx)
+    line, = ax.plot(f, Pxx)
+    # Suppression du segment le plus long qui affiche une ligne inutile
+    # Cherche le plus long segment
+    distances = np.sqrt(np.diff(f)**2 + np.diff(Pxx)**2)
+    longest_segment_index = np.argmax(distances)
+    # Coordonnées du segment le plus long
+    x1, y1 = f[longest_segment_index], Pxx[longest_segment_index]
+    x2, y2 = f[longest_segment_index + 1], Pxx[longest_segment_index + 1]
+    # Retire le segment le plus long du graphe en le remplaçant par une ligne blanche
+    ax.plot([x1, x2], [y1, y2], color="white", linewidth=3) # width = 3 pour être sûr de bien couvrir le segment même si la ligne est inclinée
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel("Amplitude")
     fmin, fmax = -new_bw/2, new_bw/2
@@ -1115,7 +1172,7 @@ def ofdm_results():
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del bw, fmax, fmin, f, Pxx, alpha_0, popup, canvas
+    del bw, fmax, fmin, f, Pxx, alpha_0, popup, canvas, distances, longest_segment_index, x1, y1, x2, y2
 
 ## Fonctions de gestion des curseurs
 # Calcule distance entre 2 points
@@ -1326,8 +1383,9 @@ def load_lang_changes():
     # Options des menus cascade
     # Graphes : spectre, STFT, 3D, taille FFT
     graphs_menu.add_command(label=lang["group_spec"], command=plot_initial_graphs)
-    graphs_menu.add_command(label=lang["group_stft"], command=plot_other_graphs)
+    graphs_menu.add_command(label=lang["group_const"], command=plot_other_graphs)
     graphs_menu.add_command(label=lang["spec_3d"], command=plot_3d_spectrogram)
+    graphs_menu.add_command(label=lang["spectrogram"], command=stft_solo)
     # Ajouter des infos sur le signal
     info_menu.add_command(label=lang["frq_info"], command=display_frq_info)
     # Changer langue. Label "English" si langue = fr, "Français" si langue = en
@@ -1337,6 +1395,7 @@ def load_lang_changes():
     info_menu.add_command(label=lang["param_spectre_persistance"], command=param_spectre_persistance)
     info_menu.add_command(label=lang["fft_size"], command=define_N)
     info_menu.add_command(label=lang["set_window"], command=set_window)
+    info_menu.add_command(label=lang["set_overlap"], command=set_overlap)
     # Modifications du signal
     mod_menu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
     mod_menu.add_command(label=lang["filter_band"], command=apply_filter_band)
@@ -1355,13 +1414,12 @@ def load_lang_changes():
     power_menu.add_command(label=lang["mts"], command=mts)
     power_menu.add_command(label=lang["pseries"], command=pseries)
     power_menu.add_command(label=lang["dsp"], command=dsp)
+    power_menu.add_command(label=lang["dsp_max"], command=dsp_max)
     # Phase
     diff_menu.add_command(label=lang["constellation"], command=constellation)
     diff_menu.add_command(label=lang["phase_spectrum"], command=phase_spectrum)
     diff_menu.add_command(label=lang["distrib_phase"], command=phase_cumulative)
     # Temps
-    time_menu.add_command(label=lang["spectrogram"], command=spectrogramme_seul)
-    time_menu.add_command(label=lang["stft"], command=stft_seul)
     time_menu.add_command(label=lang["time_amp"], command=time_amplitude)
     time_menu.add_command(label=lang["persist_spectrum"], command=spectre_persistance)
     time_menu.add_command(label=lang["diff_phase"], command=phase_difference)

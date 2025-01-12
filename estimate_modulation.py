@@ -72,16 +72,32 @@ def upsample(iq_wave, frame_rate, oversampling_factor):
     return upsampled_signal, new_frame_rate
 
 # Spectrogramme
-def compute_spectrogram(iq_wave, frame_rate, N):
+def compute_spectrogram(iq_wave, frame_rate, N, window_func='hann'):
     # Spectrogramme basé sur la FFT Cooley-Tukey (numpy.fft), cf PyDSP (Dr M. Lichtman)
     # Calcule nb de lignes pour la matrice
     num_rows = len(iq_wave) // N
     spectrogram = np.zeros((num_rows, N))
     # Calc spectrogramme
+    # Choix de fenetre
+    if window_func == 'hann':
+        window = np.hanning(N)
+    elif window_func == 'hamming':
+        window = np.hamming(N)
+    elif window_func == 'blackman':
+        window = np.blackman(N)
+    elif window_func == 'kaiser':
+        window = np.kaiser(N, beta=14)
+    elif window_func == 'bartlett':
+        window = np.bartlett(N) 
+    elif window_func == 'flattop':
+        window = flattop_window(N)
+    elif window_func == 'rect':
+        window = np.ones(N)
+    else:
+        raise ValueError("Fenêtre non supportée") 
     for i in range(num_rows):
-        segment = iq_wave[i * N:(i + 1) * N]
-        fft_result = np.fft.fftshift(np.fft.fft(segment))
-        spectrogram[i, :] = 10 * np.log10(np.abs(fft_result)**2)
+        chunk = iq_wave[i*N:(i+1)*N] * window
+        spectrogram[i, :] = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(chunk)))**2)
     # Bins fréquence et temps
     freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1/frame_rate))
     times = np.arange(num_rows) * (N / frame_rate)
@@ -127,6 +143,8 @@ def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
         window = np.bartlett(window_size) 
     elif window_func == 'flattop':
         window = flattop_window(window_size)
+    elif window_func == 'rect':
+        window = np.ones(window_size)
     else:
         raise ValueError("Fenêtre non supportée") 
     # Output arrays
@@ -146,8 +164,11 @@ def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
         times.append(start / frame_rate)
     
     stft_matrix = np.array(stft_matrix)
-    stft_matrix = np.fft.fftshift(stft_matrix, axes=1)  # Orientation : Freq X, Temps Y
-    freqs = np.fft.fftfreq(window_size, d=1/frame_rate)
+    try:
+        stft_matrix = np.fft.fftshift(stft_matrix, axes=1)  # Orientation : Freq X, Temps Y
+        freqs = np.fft.fftfreq(window_size, d=1/frame_rate)
+    except:
+        freqs = None
     
     return freqs, np.array(times), 20 * np.log10(np.abs(stft_matrix))
 
