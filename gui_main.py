@@ -95,7 +95,7 @@ def find_sample_width(file_path):
     return sample_width
 
 def load_wav():
-    global filepath, frame_rate, iq_wave, N
+    global filepath, frame_rate, iq_wave, N, overlap
     if filepath is None:
         filepath = tk.filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if not filepath:
@@ -128,6 +128,7 @@ def load_wav():
             N = 4
     else:
         N = 512 # taille de fenêtre FFT par défaut
+    overlap = N//4
 
     try:
         iq_wave = left + 1j * right  # signal IQ complexe
@@ -243,7 +244,7 @@ def define_N():
 
 # Autres groupe de graphes de base
 def plot_other_graphs():
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, window_choice
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     # Figure avec 3 sous-graphes. Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
     clear_plot()
     fig= plt.figure()
