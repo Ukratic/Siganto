@@ -62,7 +62,8 @@ filepath = None
 frame_rate = None
 iq_wave = None
 N = 512 # taille de la fenêtre FFT par défaut
-overlap = N//4 # recouvrement par défaut pour la STFT
+overlap_value = 4 # valeur de recouvrement par défaut
+overlap = N//overlap_value # recouvrement de la STFT
 toolbar = None # toolbar matplotlib
 diff_window = 0 # fenêtre de lissage des transitions
 hist_bins = 250 # bins pour les histogrammes
@@ -128,7 +129,7 @@ def load_wav():
             N = 4
     else:
         N = 512 # taille de fenêtre FFT par défaut
-    overlap = N//4
+    overlap = N//overlap_value
 
     try:
         iq_wave = left + 1j * right  # signal IQ complexe
@@ -231,21 +232,23 @@ def plot_initial_graphs():
 
 # Fonc pour changer la taille de fenêtre FFT
 def define_N():
-    global N
+    global N, overlap_value, overlap
     N = int(tk.simpledialog.askstring("N", lang["define_n"]))
     if N is None:
         if debug is True:
             print("Taille de fenêtre FFT non définie")
         return
     N = (int(N/2))*2 # N doit être pair
+    overlap = N//overlap_value
     print(lang["fft_window"], N)
     stft_solo()
     display_file_info()
 
 # Autres groupe de graphes de base et slider pour ajuster la fréquence
 def plot_other_graphs():
-    global toolbar, ax, fig, canvas, frequency_slider, iq_wave, line_constellation, line_spectrum
+    global toolbar, ax, fig, canvas, frequency_slider, iq_wave, line_constellation, line_spectrum, origin_iq_wave
     # Figure avec 3 sous-graphes. Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
+    origin_iq_wave = iq_wave.copy() # copie du signal original pour les modifications
     clear_plot()
     fig= plt.figure()
     spec = fig.add_gridspec(3, 2)
@@ -283,14 +286,14 @@ def plot_other_graphs():
     def update_frequency(val):
         global iq_wave
         fcenter = float(val)
-        iq_wave_shifted = iq_wave * np.exp(-1j * 2 * np.pi * fcenter * np.arange(len(iq_wave)) / frame_rate)
+        iq_wave = origin_iq_wave * np.exp(-1j * 2 * np.pi * fcenter * np.arange(len(iq_wave)) / frame_rate)
         # Update STFT
-        freqs, times, stft_matrix = em.compute_stft(iq_wave_shifted, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+        freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
         stft.set_data(stft_matrix)
         # Update constellation
-        line_constellation.set_offsets(np.c_[np.real(iq_wave_shifted), np.imag(iq_wave_shifted)])
+        line_constellation.set_offsets(np.c_[np.real(iq_wave), np.imag(iq_wave)])
         # Update spectrum
-        wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave_shifted)))**2
+        wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
         line_spectrum.set_ydata(wav_mag)
 
         canvas.draw()
@@ -298,7 +301,7 @@ def plot_other_graphs():
     frequency_slider = tk.Scale(plot_frame, from_=-frame_rate / 2, to=frame_rate / 2, resolution=1, orient=tk.HORIZONTAL, length=400, label=lang["freq_adjust"])
     frequency_slider.pack(side=tk.BOTTOM, fill=tk.X)
     frequency_slider.set(0)
-    frequency_slider.bind("<Motion>", lambda e: update_frequency(frequency_slider.get()))
+    frequency_slider.bind("<B1-Motion>", lambda e: update_frequency(frequency_slider.get()))
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -442,16 +445,19 @@ def set_diff_params():
     phase_difference()
 
 def set_overlap():
-    global overlap
-    overlap = tk.simpledialog.askstring(lang["params"], lang["overlap_val"])
-    if overlap is None or overlap == "":
-        overlap = N//4
+    global overlap, overlap_value
+    enter_overlap = tk.simpledialog.askstring(lang["params"], lang["overlap_val"])
+    if enter_overlap is None or enter_overlap == "" or int(enter_overlap) < 2:
+        tk.messagebox.showinfo(lang["error"], lang["overlap_valid"])
+        overlap = N//overlap_value
         if debug is True:
-            print("Pas de recouvrement défini pour la STFT. Recouvrement par défaut à ", overlap)
+            print("Pas de recouvrement valable défini pour la STFT. Recouvrement par défaut à ", overlap)
         return
-    overlap = int(overlap)
+    overlap_value = int(enter_overlap)
+    overlap = N//overlap_value
     if debug is True:
         print("Recouvrement défini à ", overlap)
+    display_file_info()
     stft_solo()
 
 def stft_solo():
@@ -530,9 +536,9 @@ def display_file_info():
     if filepath is None:
         info_label.config(text=lang["no_file"])
         return
-    info_label.config(text=f"{filepath} {lang['encoding']} {find_sample_width(filepath)} bits \
-                      \n{lang['samples']} {len(iq_wave)}. {lang['sampling_frq']} {frame_rate} Hz. \
-                      \n{lang['duree']}: {len(iq_wave)/frame_rate:.2f} sec. {lang['fft_window']} {N}. {lang['f_resol']} {frame_rate/N:.2f} Hz.")
+    info_label.config(text=f"{filepath}. {lang['encoding']} {find_sample_width(filepath)} bits. \
+                      \n{lang['samples']} {len(iq_wave)}. {lang['sampling_frq']} {frame_rate} Hz. {lang['duree']}: {len(iq_wave)/frame_rate:.2f} sec.\
+                      \n {lang['fft_window']} {N}. Overlap : {overlap}. {lang['f_resol']} {frame_rate/N:.2f} Hz.")
     if debug is True:
         print("Affichage des informations du fichier")
         print("Chargé: ", filepath)
@@ -541,6 +547,7 @@ def display_file_info():
         print("Fréquence d'échantillonnage: ", frame_rate)
         print("Durée: ", len(iq_wave)/frame_rate, " secondes")
         print("Taille fenêtre FFT: ", N)
+        print("Recouvrement: ", overlap)
 
 # Fonctions de traitement du signal (filtres, déplacement de fréquence, sous-échantillonnage, sur-échantillonnage, coupure)
 def move_frequency():
@@ -1055,7 +1062,7 @@ def phase_spectrum():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    ax.phase_spectrum(iq_wave, frame_rate)
+    ax.phase_spectrum(iq_wave, Fs=frame_rate)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(lang["insta_phase"])
 

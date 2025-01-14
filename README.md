@@ -52,8 +52,8 @@ Overlap.
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
 
 ### Examples :
-- Spectrogram of a FSK17 signal <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.png" alt="FSK17"/>
+- Spectrogram of a Chinese 4+4 signal <br>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.png" alt="4_4"/>
 - Constellation of a dPMR signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.png" alt="dPMR"/>
 - PSD of a IS-95 (CDMA) signal <br>
@@ -64,7 +64,7 @@ Overlap.
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_6.png" alt="TETRAPOL"/>
 - Results of a CIS-45 OFDM signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="CIS-45"/>
-- Frequency transitions of a FSK signal <br>
+- Frequency transitions of a FHSS/FSK17 signal <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_8.png" alt="FSK_transitions"/>
 
 ### Changelog :
@@ -77,7 +77,7 @@ Overlap.
 -- Added option to choose the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top, Rectangular.<br>
 -- Added dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal.<br>
 -- Streamlining of spectrogram options and display.<br>
--- Testing new feature : Slider for frequency fine-tuning. Only on Spectrogram/Constellation group for now, doesn't change frequency for all other graphs.
+-- Testing new feature : Slider for frequency fine-tuning. Only on Spectrogram/Constellation group for now.
 
 ### Using the app
 1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file to open the GUI.<br>

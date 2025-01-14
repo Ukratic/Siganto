@@ -131,11 +131,12 @@ def get_fra_lib():
         "f_resol" : "Résolution en fréquence :",
         "set_window" : "Définir la fonction de fenêtrage",
         "window_choice" : "Choix de la fonction de fenêtrage :",
-        "overlap_val" : "Valeur de recouvrement (taille de fenêtre//{nouvelle valeur}) :",
+        "overlap_val" : "Valeur de recouvrement (taille de fenêtre//{nouveau facteur}) :",
         "set_overlap" : "Définir la valeur de recouvrement",
         "dsp_max" : "DSP max",
         "error_stft" : "Erreur dans le calcul de la STFT. Essayez une autre taille de fenêtre, fonction et/ou recouvrement.",
         "freq_adjust" : "Ajustement de fréquence",
+        "overlap_valid" : "Entrez une valeur de recouvrement valide",
     
     }
     return fra_lib
@@ -271,11 +272,12 @@ def get_eng_lib():
         "f_resol" : "Frequency resolution :",
         "set_window" : "Set window function",
         "window_choice" : "Window function choice :",
-        "overlap_val" : "Overlap value (window size//{new value}) :",
+        "overlap_val" : "Overlap value (window size//{new factor}) :",
         "set_overlap" : "Set overlap value",
         "dsp_max" : "Max PSD",
         "error_stft" : "Error in STFT computation. Try another window size, function and/or overlap.",
         "freq_adjust" : "Frequency fine-tuning",
+        "overlap_valid" : "Enter a valid overlap value",
 
     }
     return eng_lib
