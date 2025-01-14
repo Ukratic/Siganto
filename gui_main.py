@@ -242,9 +242,9 @@ def define_N():
     stft_solo()
     display_file_info()
 
-# Autres groupe de graphes de base
+# Autres groupe de graphes de base et slider pour ajuster la fréquence
 def plot_other_graphs():
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    global toolbar, ax, fig, canvas, frequency_slider, iq_wave, line_constellation, line_spectrum
     # Figure avec 3 sous-graphes. Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
     clear_plot()
     fig= plt.figure()
@@ -261,31 +261,51 @@ def plot_other_graphs():
         return
     # STFT
     freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
-    ax[0].imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0],cmap=cm.jet)
+    stft = ax[0].imshow(stft_matrix, aspect='auto', extent=[frame_rate / -2, frame_rate / 2, len(iq_wave) / frame_rate, 0], cmap=cm.jet)
     ax[0].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
     ax[0].set_title(f"{lang['window']} {window_choice}")
 
     # Constellation
-    ax[1].scatter(np.real(iq_wave), np.imag(iq_wave), s=1)
+    line_constellation = ax[1].scatter(np.real(iq_wave), np.imag(iq_wave), s=1)
     ax[1].set_xlabel("In-Phase")
     ax[1].set_ylabel("Quadrature")
 
     # DSP avec max
     wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
     f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave)) # frq en Hz
-    ax[2].plot(f, wav_mag)
-    ax[2].plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # show max
+    line_spectrum, = ax[2].plot(f, wav_mag)
+    ax[2].plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # point max
     ax[2].grid()
     ax[2].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[2].set_ylabel("Amplitude")
+
+    def update_frequency(val):
+        global iq_wave
+        fcenter = float(val)
+        iq_wave_shifted = iq_wave * np.exp(-1j * 2 * np.pi * fcenter * np.arange(len(iq_wave)) / frame_rate)
+        # Update STFT
+        freqs, times, stft_matrix = em.compute_stft(iq_wave_shifted, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+        stft.set_data(stft_matrix)
+        # Update constellation
+        line_constellation.set_offsets(np.c_[np.real(iq_wave_shifted), np.imag(iq_wave_shifted)])
+        # Update spectrum
+        wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave_shifted)))**2
+        line_spectrum.set_ydata(wav_mag)
+
+        canvas.draw()
+
+    frequency_slider = tk.Scale(plot_frame, from_=-frame_rate / 2, to=frame_rate / 2, resolution=1, orient=tk.HORIZONTAL, length=400, label=lang["freq_adjust"])
+    frequency_slider.pack(side=tk.BOTTOM, fill=tk.X)
+    frequency_slider.set(0)
+    frequency_slider.bind("<Motion>", lambda e: update_frequency(frequency_slider.get()))
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del stft_matrix, canvas, spec, a0, a1, a2, f, wav_mag
+    del spec, a0, a1, a2, f, stft_matrix, freqs, times, wav_mag
 
 # Fonc de changement de fenêtre FFT pour STFT
 def set_window():

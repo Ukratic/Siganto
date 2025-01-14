@@ -8,12 +8,8 @@ Its purpose is to read .wav files (recorded from SDR tools, obtained from somewh
 Real-time applications are outside of the scope of this tool.<br>
 Some of the identification is automated (see some examples with screenshots below) but should always be confirmed manually.<br>
 
-The tool only supports analysis for now, fine-tuning and demodulation will be covered in further versions.<br>
-In these, I might also switch from Tkinter to PyQt for better performance ; be aware that you will, in the current version, likely experience some sluggishness if your file contains samples in the order of a few millions and the GUI will become downright painful to use with a file containing several tens of millions of samples or more.<br>
-
-Expected file encoding is standard 16-bit wav, but 8 to 64-bit is supported. Other formats might be added if there is a need for it.<br>
-
-The repository also contains 2 scripts to convert mp3 and SigMF files into wav, so it can then be read into SigAnTo (or whatever else shares .wav requirements). Be aware the mp3 conversion requires ffmpeg.<br>
+The tool only supports analysis for now, fine-tuning and demodulation will be covered in future versions.<br>
+At some point I might also switch from Tkinter to PyQt for better performance ; be aware that in the current version, you will likely experience some acceptable sluggishness if your file contains samples in the order of a few millions but the GUI will become downright painful to use with a file containing several tens or hundreds of millions of samples or more.<br>
 
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_1.png" alt="Main"/><br>
 
@@ -80,7 +76,8 @@ Overlap.
 - January 2025 : <br>
 -- Added option to choose the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top, Rectangular.<br>
 -- Added dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal.<br>
--- Streamlining of spectrogram options and display.
+-- Streamlining of spectrogram options and display.<br>
+-- Testing new feature : Slider for frequency fine-tuning. Only on Spectrogram/Constellation group for now, doesn't change frequency for all other graphs.
 
 ### Using the app
 1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file to open the GUI.<br>
@@ -104,23 +101,22 @@ The --noconsole argument with pyinstaller removes the console, which is not nece
 
 Packaging with Nuitka instead might lighten the size of the package and improve performance as well, but its ease of use is dependant upon OS, C compiler, python version... so I wouldn't recommend it unless you know what you are getting into.<br>
 
-The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib so there should be no need to change you python environment if it is >3.8.<br>
-The Scipy dependency is responsible for roughly half the size of the packaged app, so I might make the effort to remove that at some point by coding some of those functions myself... but this is a not unsignificant effort that I am not sure would be worth it since Scipy should be considered a safe standard almost everywhere. Matplotlib & Numpy will most definitely stay.
+The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib so there should be no need to change your python environment if it is in a version > 3.8.<br>
+The Scipy dependency is responsible for roughly half the size of the packaged app (contains Scipy.stats and lots of stuff that I am not using), so I might one day make the effort to remove that by coding some of those functions myself... but this is a not unsignificant effort that I am not sure would be worth it since Scipy should be considered a standard almost everywhere. Numpy on the other hand will most definitely stay ; Matplotlib will as well, at least until (if ever) I move to another GUI library.
 
 ### Supported Hardware :
 None ! As previously stated, this tool has no real-time applications.
 
 ### Supported file format :
 WAV 8-bit, 16-bit, 32-bit, 64-bit.<br>
-Scripts to convert from SigMF & mp3 available in this repo (SigMF should work without a hitch though you'll of course lose the metadata. Mp3 conversion might be a little more sketchy and the result should be considered carefully).
+Scripts to convert from SigMF & mp3 available in this repo (SigMF should work without a hitch though you'll of course lose the metadata. Mp3 conversion might be a little more sketchy and the result should be considered carefully) and requires ffmpeg.
 
 ### Useful resources :
 - Information on signals and some example .wav files available : <br>
 [Signal Identification Guide](https://www.sigidwiki.com/)<br>
 [RadioReference Wiki](https://wiki.radioreference.com/index.php/)<br>
 [Priyom.org](https://priyom.org/)
-- [PySDR](https://pysdr.org/index.html) by Dr. Marc Lichtman
 
 ### Credits :
 - Drs. FX Socheleau & S Houcke on OFDM blind analysis
-- Dr. Marc Lichtman on Spectrogram generation and a great starter for python DSP
+- Dr. Marc Lichtman on Spectrogram generation and a great starter for python DSP : [PySDR](https://pysdr.org/index.html) 
