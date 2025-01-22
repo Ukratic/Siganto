@@ -2,7 +2,7 @@
 
 A lightweight signal analysis toolbox GUI.<br><br>
 Built on top of base python (>=3.9 with tkinter), numpy, matplotlib and scipy.<br>
-Its low list of dependencies will hopefully allow most people to run it without too much hassle in university or industry environments (or use the executable to avoid dependencies altogether).
+Its low list of dependencies will hopefully allow most people to run it without too much hassle in university, industry or government environments (if not, use the executable to avoid dependencies altogether).
 
 Its purpose is to read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs and measurements.
 Real-time applications are outside of the scope of this tool.<br>
@@ -20,35 +20,37 @@ Spectrogram shown when a file is loaded.
 - Activate measuring cursors (deactivated by default upon loading a new graph). Distance between 2 cursors is shown and you can also jump to a nearby peak.
 - Change FFT parameters :<br>
 Window size (default based on number of samples), <br>
-Window function (Tukey, Kaiser, Hann, Hamming, Blackman, Bartlett, Flattop, Rectangular), <br>
+Window function (Kaiser, Hann, Hamming, Blackman, Bartlett, Flattop, Rectangular), <br>
 Overlap.
 - Change language (English and French available)
 - Display frequency & power information of the signal file (Estimated BW, dB level, symbol rate & ACF)
 - Modify parameters for transition (phase, frequency) & persistence graphs
 #### 2. Signal modification
 - Low, High or Band Pass filter
-- Central Frequency offset (enter a value or by cursor selection)
-- Averaging
+- Central Frequency offset (enter a value, cursor selection or fine-tuning with arrow keys)
+- Averaging (default mean level or defined value)
 - Down or Up Sampling (by ratio of an integer >1)
 - Cut part of the signal in time (enter a value or by cursor selection)
 - Save as a new .wav file
-#### 3. Time Metrics
+#### 3. Main graphs
 - Spectrogram (STFT & 3D)
+- Groups with several graphs on the same window
+#### 4. Time Metrics
 - Time/Amplitude (IQ samples)
 - Persistence Spectrum
 - Phase Transitions
 - Frequency Transitions
-#### 4. Power Metrics
+#### 5. Power Metrics
 - Power Spectrum FFT (and variant)
 - Signal power
 - PSD (and variant)
-#### 5. Phase Metrics
+#### 6. Phase Metrics
 - Constellation
 - Phase Spectrum
 - Phase Distribution
-#### 6. Cyclostationarity Metrics
+#### 7. Cyclostationarity Metrics
 - Autocorrelation function (fft-based fast variant or complete)
-#### 7. OFDM Metrics
+#### 8. OFDM Metrics
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
 
 ### Examples :
@@ -77,17 +79,18 @@ Overlap.
 -- Added option to choose the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top, Rectangular.<br>
 -- Added dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal.<br>
 -- Streamlining of spectrogram options and display.<br>
--- Testing new feature : Slider for frequency fine-tuning. Only on Spectrogram/Constellation group for now.
+-- Executable *SigAnto_v1.052.exe* available.
+-- Testing new feature : Arrows for frequency fine-tuning (1Hz step). Only on Spectrogram/Constellation group for now.
 
 ### Using the app
 1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file to open the GUI.<br>
-The GUI is in French by default, but can be switched to English (line 34, just swap "get_fra_lib" to "get_eng_lib").<br>
-Debugging in the console can also be deactivated line 80.
+The GUI is in French by default, but can easily be switched to English (line 36, just swap "get_fra_lib" to "get_eng_lib").<br>
+Debugging in the console can also be deactivated line 82.
 ```
 python3 gui_main.py
 ```
 
-2. Download and use the executable *SigAnto_v1.051.exe* (from 12th of January 2024 code).
+2. Download and use the executable *SigAnto_v1.052.exe* (from 12th of January 2024 code, stable version but not including the latest fixes).
 It is packaged in French but can still be swapped to English after launch in "Affichage/Switch language".
 <br>
 You can also easily package it yourself to share it to people unfamiliar with command line use : <br>
@@ -97,7 +100,7 @@ I would recommend the following pyinstaller command (having previously set up a 
 (python -m) pyinstaller --onedir --noconsole --icon=radio-waves.ico gui_main.py --name SigAnTo
 ```
 Note that the executable provided in this repository was created with --onefile instead of --onedir : resulting in a single file obviously, but with slower start-up (it has to decompress in a temp directory at load).
-The --noconsole argument with pyinstaller removes the console, which is not necessary for normal GUI use, but might trigger false antivirus flags during build.<br>
+The --noconsole argument with pyinstaller removes the unneeded console, but might trigger false antivirus flags during build.<br>
 
 Packaging with Nuitka instead might lighten the size of the package and improve performance as well, but its ease of use is dependant upon OS, C compiler, python version... so I wouldn't recommend it unless you know what you are getting into.<br>
 

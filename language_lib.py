@@ -15,7 +15,6 @@ def get_fra_lib():
         "sampling_frq": "Fréquence d'échantillonnage: ",
         "error": "Erreur",
         "apply": "Appliquer",
-        "threshold": "Seuil",
         "fin": "Fin",
         "duree": "Durée",
         "oui": "Oui",
@@ -47,7 +46,7 @@ def get_fra_lib():
         "mean": "Moyenner le signal",
         "mean_level": "Niveau moyen en dB: ",
         "level": "Niveau de moyennage: ",
-        "apply_mean": "Appliquer le moyennage",
+        "apply_mean": "Appliquer le moyennage par défaut",
         "def_level": "Définir le seuil",
         "enter_level": "Entrer le niveau en dB :", 
         "downsample": "Sous-échantillonner",
@@ -137,6 +136,9 @@ def get_fra_lib():
         "error_stft" : "Erreur dans le calcul de la STFT. Essayez une autre taille de fenêtre, fonction et/ou recouvrement.",
         "freq_adjust" : "Ajustement de fréquence",
         "overlap_valid" : "Entrez une valeur de recouvrement valide",
+        "offset_freq" : "Décalage de fréquence",
+        "not_apply" : "Pas de moyennage",
+        "wav_load" : "Chargement du wav",
     
     }
     return fra_lib
@@ -159,7 +161,6 @@ def get_eng_lib():
         "debut": "Start",
         "fin": "End",
         "duree": "Duration",
-        "threshold": "Threshold",
         "oui": "Yes",
         "non": "No",
         "params": "Parameters",
@@ -189,7 +190,7 @@ def get_eng_lib():
         "mean": "Average signal",
         "mean_level": "Mean level in dB: ",
         "level": "Averaging level: ",
-        "apply_mean": "Apply mean",
+        "apply_mean": "Apply default mean",
         "def_level": "Set threshold",
         "enter_level": "Enter level in dB :",
         "downsample": "Downsample",
@@ -278,6 +279,9 @@ def get_eng_lib():
         "error_stft" : "Error in STFT computation. Try another window size, function and/or overlap.",
         "freq_adjust" : "Frequency fine-tuning",
         "overlap_valid" : "Enter a valid overlap value",
+        "offset_freq" : "Frequency offset",
+        "not_apply" : "No averaging",
+        "wav_load" : "Wav loading",
 
     }
     return eng_lib

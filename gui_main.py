@@ -20,7 +20,7 @@ loading_end = Event()
 def loading_libs():
     # Librairies
     print("Chargement des dépendances...")
-    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang
+    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm
     import struct
     import gc
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -30,6 +30,8 @@ def loading_libs():
     import scipy.io.wavfile as wav
     import language_lib as ll
     import estimate_modulation as em
+    import main_graphs as mg
+    import signal_modification as sm
     # Langue, noms des fonctions, etc.
     lang = ll.get_fra_lib()
     # loading_end.wait() à la fin du script
@@ -76,7 +78,6 @@ distance_text = None # distance entre les curseurs
 cursor_mode = False  # on/off
 click_event_id = None
 peak_indices = []
-mfsk_threshold = 1000
 # messages de debug
 debug = True
 
@@ -191,7 +192,7 @@ def plot_initial_graphs():
     if not filepath:
         print(lang["no_file"])
         return
-    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
@@ -202,7 +203,7 @@ def plot_initial_graphs():
     ax[0].set_title(f"{lang['window']} {window_choice}")
 
     # DSP
-    bw, fmin, fmax, f, Pxx = em.estimate_bandwidth(iq_wave, frame_rate, N)
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N)
     line, = ax[1].plot(f, Pxx)
     # Suppression du segment le plus long qui affiche une ligne inutile
     # Cherche le plus long segment
@@ -244,13 +245,14 @@ def define_N():
     stft_solo()
     display_file_info()
 
-# Autres groupe de graphes de base et slider pour ajuster la fréquence
+# # Autres groupe de graphes de base et flèches pour ajuster la fréquence centrale
 def plot_other_graphs():
-    global toolbar, ax, fig, canvas, frequency_slider, iq_wave, line_constellation, line_spectrum, origin_iq_wave
+    global toolbar, ax, fig, canvas, iq_wave, original_iq_wave, fcenter, freq_label
     # Figure avec 3 sous-graphes. Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
-    origin_iq_wave = iq_wave.copy() # copie du signal original pour les modifications
+    original_iq_wave = iq_wave.copy() # copie du signal original pour les modifications
+    fcenter = 0  # Init de l'offset FC
     clear_plot()
-    fig= plt.figure()
+    fig = plt.figure()
     spec = fig.add_gridspec(3, 2)
     fig.suptitle(lang["spec_const"])
     fig.tight_layout()
@@ -258,12 +260,11 @@ def plot_other_graphs():
     a1 = fig.add_subplot(spec[2, 0])
     a2 = fig.add_subplot(spec[2, 1])
     ax = (a0, a1, a2)
-    print(lang["spec_const"])
     if not filepath:
         print(lang["no_file"])
         return
     # STFT
-    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
     stft = ax[0].imshow(stft_matrix, aspect='auto', extent=[frame_rate / -2, frame_rate / 2, len(iq_wave) / frame_rate, 0], cmap=cm.jet)
     ax[0].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
@@ -276,33 +277,55 @@ def plot_other_graphs():
 
     # DSP avec max
     wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
-    f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave)) # frq en Hz
+    f = np.linspace(frame_rate / -2, frame_rate / 2, len(iq_wave)) # freq en Hz
     line_spectrum, = ax[2].plot(f, wav_mag)
     ax[2].plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # point max
     ax[2].grid()
     ax[2].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[2].set_ylabel("Amplitude")
 
-    def update_frequency(val):
-        global iq_wave
-        fcenter = float(val)
-        iq_wave = origin_iq_wave * np.exp(-1j * 2 * np.pi * fcenter * np.arange(len(iq_wave)) / frame_rate)
-        # Update STFT
-        freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    # Label pour afficher l'offset FC
+    freq_label = tk.Label(plot_frame, text=f"{lang['offset_freq']}: {fcenter} Hz")
+    freq_label.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def update_graph():
+        global iq_wave, fcenter
+        # Recompute iq_wave avec l'offset de fréquence à partir de l'iq_wave original
+        iq_wave = original_iq_wave * np.exp(-1j * 2 * np.pi * fcenter * np.arange(len(original_iq_wave)) / frame_rate)
+        # Màj label
+        freq_label.config(text=f"{lang['offset_freq']}: {fcenter} Hz")
+        # Màj STFT
+        freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
         stft.set_data(stft_matrix)
-        # Update constellation
+        # Màj constellation
         line_constellation.set_offsets(np.c_[np.real(iq_wave), np.imag(iq_wave)])
-        # Update spectrum
+        # Màj DSP
         wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
         line_spectrum.set_ydata(wav_mag)
 
         canvas.draw()
 
-    frequency_slider = tk.Scale(plot_frame, from_=-frame_rate / 2, to=frame_rate / 2, resolution=1, orient=tk.HORIZONTAL, length=400, label=lang["freq_adjust"])
-    frequency_slider.pack(side=tk.BOTTOM, fill=tk.X)
-    frequency_slider.set(0)
-    frequency_slider.bind("<B1-Motion>", lambda e: update_frequency(frequency_slider.get()))
+    def move_left(event):
+        global fcenter
+        fcenter -= 1  # Freq - 1 Hz
+        update_graph()
 
+    def move_right(event):
+        global fcenter
+        fcenter += 1  # Freq + 1 Hz
+        update_graph()
+
+    # Flèches du clavier pour déplacer la fréquence centrale
+    root.bind("<Left>", move_left)
+    root.bind("<Right>", move_right)
+    # Sinon boutons sur l'interface
+    button_frame = tk.Frame(plot_frame)
+    button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+    left_button = tk.Button(button_frame, text="←", command=move_left)
+    left_button.pack(side=tk.LEFT, padx=10)
+    right_button = tk.Button(button_frame, text="→", command=move_right)
+    right_button.pack(side=tk.RIGHT, padx=10)
+    
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
     toolbar.update()
@@ -351,7 +374,7 @@ def plot_3d_spectrogram():
         print(lang["no_file"])
         return
     # Génération du spectrogramme 3D 
-    freqs, times, spectrogram = em.compute_spectrogram(iq_wave, frame_rate, N, window_func=window_choice)
+    freqs, times, spectrogram = mg.compute_spectrogram(iq_wave, frame_rate, N, window_func=window_choice)
     X, Y = np.meshgrid(freqs, times)
     ax = plt.subplot(projection='3d')
     ax.plot_surface(X, Y, spectrogram, cmap=cm.coolwarm)
@@ -472,7 +495,7 @@ def stft_solo():
         return
 
     ax = plt.subplot()
-    freqs, times, stft_matrix = em.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
@@ -497,13 +520,14 @@ def display_frq_info():
         if debug is True:
             print("Fichier non chargé")
         return
-    freqs, dsp = em.compute_dsp(iq_wave, frame_rate, N)
-    f_pmax = freqs[np.argmax(dsp)]
-    f_pmin = freqs[np.argmin(dsp)]
+    wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
+    f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave))
+    f_pmax = f[np.argmax(wav_mag)]
+    f_pmin = f[np.argmin(wav_mag)] 
     max_lvl = 10*np.log10(np.max(np.abs(iq_wave)**2))
     low_lvl = 10*np.log10(np.min(np.abs(iq_wave)**2))
     mean_lvl = 10*np.log10(np.mean(np.abs(iq_wave)**2))
-    estim_bw = round(np.abs(em.estimate_bandwidth(iq_wave, frame_rate, N)[0]),2)
+    estim_bw = round(np.abs(mg.estimate_bandwidth(iq_wave, frame_rate, N)[0]),2)
     estim_speed = round(np.abs(em.mean_threshold_spectrum(iq_wave, frame_rate)[2]),2)
     estim_speed_2 = round(np.abs(em.power_spectrum_fft(iq_wave, frame_rate)[2]),2)
     acf_peak = round(np.abs(em.autocorrelation_peak(iq_wave, frame_rate, min_distance=25)[1]),2)
@@ -596,9 +620,9 @@ def apply_filter_high_low():
             print("Filtre passe-", filter_type.get(), " non appliqué. Fréquence de coupure non définie")
         return
     if filter_type.get() == lang["low_val"]:
-        iq_wave = em.lowpass_filter(iq_wave, float(cutoff.get()), frame_rate)
+        iq_wave = sm.lowpass_filter(iq_wave, float(cutoff.get()), frame_rate)
     elif filter_type.get() == lang["high_val"]:
-        iq_wave = em.highpass_filter(iq_wave, float(cutoff.get()), frame_rate)
+        iq_wave = sm.highpass_filter(iq_wave, float(cutoff.get()), frame_rate)
     if debug is True:
         print("Filtre passe-", filter_type.get(), " appliqué. Fréquence de coupure: ", cutoff.get(), "Hz")
     plot_initial_graphs()
@@ -621,7 +645,7 @@ def apply_filter_band():
     if lowcut.get() == "" or highcut.get() == "":
         tk.messagebox.showinfo(lang["error"], lang["freq_valid"])
         return
-    iq_wave = em.bandpass_filter(iq_wave, float(lowcut.get()), float(highcut.get()), frame_rate)
+    iq_wave = sm.bandpass_filter(iq_wave, float(lowcut.get()), float(highcut.get()), frame_rate)
     if debug is True:
         print("Filtre passe-bande appliqué. Fréquence de coupure basse: ", lowcut.get(), "Hz. Fréquence de coupure haute: ", highcut.get(), "Hz")
     plot_initial_graphs()
@@ -632,23 +656,19 @@ def mean_filter():
     # popup pour choisir entre appliquer ou définir le seuil
     popup = tk.Toplevel()
     popup.title(lang["mean"])
-    popup.geometry("300x100")
+    popup.geometry("300x150")
     mean_filter = tk.StringVar()
-    mean_filter.set(lang["apply"])
+    mean_filter.set(lang["not_apply"])
     # Afficher sur la popup la valeur de la variable
     iq_floor = 10*np.log10(np.mean(np.abs(iq_wave)**2))
     tk.Label(popup, text=lang["mean_level"] + str(iq_floor)).pack()
-    tk.Radiobutton(popup, text=lang["apply_mean"], variable=mean_filter, value=lang["apply"]).pack()
-    tk.Radiobutton(popup, text=lang["def_level"], variable=mean_filter, value=lang["threshold"]).pack()
+    tk.Radiobutton(popup, text=lang["not_apply"], variable=mean_filter, value=lang["not_apply"]).pack()
+    tk.Radiobutton(popup, text=lang["apply_mean"], variable=mean_filter, value=lang["apply_mean"]).pack()
+    tk.Radiobutton(popup, text=lang["def_level"], variable=mean_filter, value=lang["def_level"]).pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
-    # si on ferme la popup, on ne fait rien
     popup.grab_set()
     popup.wait_window()
-    if mean_filter.get() is None:
-        return
-    elif mean_filter.get() == lang["apply"]:
-        iq_wave = np.where(10*np.log10(np.abs(iq_wave)**2) < iq_floor, 0, iq_wave)
-    elif mean_filter.get() == "seuil":
+    if mean_filter.get() == lang["def_level"]:
         iq_floor = float(tk.simpledialog.askstring(lang["level"], lang["enter_level"]))
         iq_wave = np.where(10*np.log10(np.abs(iq_wave)**2) < iq_floor, 0, iq_wave)
         if iq_floor is None:
@@ -657,6 +677,13 @@ def mean_filter():
             return
         if debug is True:
             print("Signal moyenné avec un seuil de ", iq_floor, " dB")
+    elif mean_filter.get() == lang["apply_mean"]:
+        iq_wave = np.where(10*np.log10(np.abs(iq_wave)**2) < iq_floor, 0, iq_wave)
+        if debug is True:
+            print("Signal moyenné avec un seuil de ", iq_floor, " dB")
+    else:
+        return
+    
     print(lang["mean"])
     plot_initial_graphs()
 
@@ -669,7 +696,7 @@ def downsample_signal():
             print("Taux de sous-échantillonnage non défini")
         return
     decimation_factor = int(rate)
-    iq_wave, frame_rate = em.downsample(iq_wave, frame_rate, decimation_factor)
+    iq_wave, frame_rate = sm.downsample(iq_wave, frame_rate, decimation_factor)
     print(lang["sampling_frq"], frame_rate, "Hz")
     plot_initial_graphs()
     display_file_info()
@@ -683,7 +710,7 @@ def upsample_signal():
             print("Taux de sur-échantillonnage non défini")
         return
     oversampling_factor = int(rate)
-    iq_wave, frame_rate = em.upsample(iq_wave, frame_rate, oversampling_factor)
+    iq_wave, frame_rate = sm.upsample(iq_wave, frame_rate, oversampling_factor)
     print(lang["sampling_frq"], frame_rate, "Hz")
     plot_initial_graphs()
     display_file_info()
@@ -847,7 +874,7 @@ def dsp():
     fig = plt.figure()
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
-    bw, fmin, fmax, f, Pxx = em.estimate_bandwidth(iq_wave, frame_rate, N)
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N)
     line, = ax.plot(f, Pxx)
     # Suppression du segment le plus long qui affiche une ligne inutile
     # Cherche le plus long segment
@@ -1131,7 +1158,7 @@ def ofdm_results():
         return
     alpha_0 = float(alpha_0)
     dsp()
-    bw, fmin, fmax, f, Pxx = em.estimate_bandwidth(iq_wave, frame_rate, N)
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N)
     # affiche BW estimée et demande de valider ou de redéfinir la bande passante
     popup = tk.Toplevel()
     popup.title(lang["bandwidth"])
