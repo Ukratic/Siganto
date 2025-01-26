@@ -1,6 +1,6 @@
 ## SigAnTo
 
-A lightweight signal analysis toolbox GUI.<br><br>
+A lightweight signal analysis GUI toolbox.<br><br>
 Built on top of base python (>=3.9 with tkinter), numpy, matplotlib and scipy.<br>
 Its low list of dependencies will hopefully allow most people to run it without too much hassle in university, industry or government environments (if not, use the executable to avoid dependencies altogether).
 
@@ -8,7 +8,7 @@ Its purpose is to read .wav files (recorded from SDR tools, obtained from somewh
 Real-time applications are outside of the scope of this tool.<br>
 Some of the identification is automated (see some examples with screenshots below) but should always be confirmed manually.<br>
 
-The tool only supports analysis for now, fine-tuning and demodulation will be covered in future versions.<br>
+The tool only supports analysis for now, including fine-tuning eventually. Demodulation may be covered in future versions.<br>
 At some point I might also switch from Tkinter to PyQt for better performance ; be aware that in the current version, you will likely experience some acceptable sluggishness if your file contains samples in the order of a few millions but the GUI will become downright painful to use with a file containing several tens or hundreds of millions of samples or more.<br>
 
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_1.png" alt="Main"/><br>
@@ -72,15 +72,19 @@ Overlap.
 ### Changelog :
 - December 2024 : <br>
 -- First upload on github<br>
--- Fixed language output in the console, now correctly dependent on language choice in the GUI.<br>
+-- Fixed language output in the console, now correctly dependent on language choice in the GUI (except debug output).<br>
 -- Executable *SigAnto_v1.05.exe* available.
 
 - January 2025 : <br>
 -- Added option to choose the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top, Rectangular.<br>
--- Added dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal.<br>
+-- Added dynamic frequency resolution on file load instead of fixed FFT size, hopefully improving first look at a signal.<br>
 -- Streamlining of spectrogram options and display.<br>
--- Executable *SigAnto_v1.052.exe* available.
--- Testing new feature : Arrows for frequency fine-tuning (1Hz step). Only on Spectrogram/Constellation group for now.
+-- Executable *SigAnto_v1.052.exe* available.<br>
+-- Testing new feature : Arrows for frequency fine-tuning (1Hz step). Only on Spectrogram/Constellation group for now.<br> 
+
+- In future versions : <br>
+-- Automatic modulation recognition, if I can figure out a decent algorithm.
+
 
 ### Using the app
 1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file to open the GUI.<br>
@@ -93,18 +97,11 @@ python3 gui_main.py
 2. Download and use the executable *SigAnto_v1.052.exe* (from 12th of January 2024 code, stable version but not including the latest fixes).
 It is packaged in French but can still be swapped to English after launch in "Affichage/Switch language".
 <br>
-You can also easily package it yourself to share it to people unfamiliar with command line use : <br>
-I would recommend the following pyinstaller command (having previously set up a virtual env with the files in this repo and only the required libraries), which would provide you with a directory containing an executable.
+You can also easily package it yourself to share it to people unfamiliar with command line use.<br>
+The executable provided in this directory was created with --onefile instead of --onedir : resulting in a single file obviously, but with slower start-up (it has to decompress in a temp directory at load).<br>
+Packaging with Nuitka or some other packaging tool instead might lighten the size of the package and improve performance as well, but their ease of use is often dependant upon OS, C compiler, python version... so I wouldn't recommend it unless you know what you are getting into.<br>
 
-```
-(python -m) pyinstaller --onedir --noconsole --icon=radio-waves.ico gui_main.py --name SigAnTo
-```
-Note that the executable provided in this repository was created with --onefile instead of --onedir : resulting in a single file obviously, but with slower start-up (it has to decompress in a temp directory at load).
-The --noconsole argument with pyinstaller removes the unneeded console, but might trigger false antivirus flags during build.<br>
-
-Packaging with Nuitka instead might lighten the size of the package and improve performance as well, but its ease of use is dependant upon OS, C compiler, python version... so I wouldn't recommend it unless you know what you are getting into.<br>
-
-The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib so there should be no need to change your python environment if it is in a version > 3.8.<br>
+The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib so there should be no need to change your environment to run the code if you are using a python version equal or above 3.8.<br>
 The Scipy dependency is responsible for roughly half the size of the packaged app (contains Scipy.stats and lots of stuff that I am not using), so I might one day make the effort to remove that by coding some of those functions myself... but this is a not unsignificant effort that I am not sure would be worth it since Scipy should be considered a standard almost everywhere. Numpy on the other hand will most definitely stay ; Matplotlib will as well, at least until (if ever) I move to another GUI library.
 
 ### Supported Hardware :
@@ -112,13 +109,16 @@ None ! As previously stated, this tool has no real-time applications.
 
 ### Supported file format :
 WAV 8-bit, 16-bit, 32-bit, 64-bit.<br>
-Scripts to convert from SigMF & mp3 available in this repo (SigMF should work without a hitch though you'll of course lose the metadata. Mp3 conversion might be a little more sketchy and the result should be considered carefully) and requires ffmpeg.
+Scripts to convert from SigMF & MP3 are available in this repo.<br>
+SigMF conversion should work without a hitch though the metadata won't make it into the wav and therefore won't be shown in the GUI. 
+MP3 conversion requires ffmpeg and might also be a little more sketchy depending on how the file was recorded & encoded ; the result should be considered carefully.
 
 ### Useful resources :
 - Information on signals and some example .wav files available : <br>
 [Signal Identification Guide](https://www.sigidwiki.com/)<br>
 [RadioReference Wiki](https://wiki.radioreference.com/index.php/)<br>
 [Priyom.org](https://priyom.org/)
+[Tony Anselmi's blog](https://i56578-swl.blogspot.com/)
 
 ### Credits :
 - Drs. FX Socheleau & S Houcke on OFDM blind analysis
