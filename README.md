@@ -27,10 +27,10 @@ Overlap.
 - Modify parameters for transition (phase, frequency) & persistence graphs
 #### 2. Signal modification
 - Low, High or Band Pass filter
-- Central Frequency offset (enter a value, cursor selection or fine-tuning with arrow keys)
+- Central Frequency offset (enter a value, cursor selection or fine-tuning with arrow keys ; last option available only on tri-graph group for now)
 - Averaging (default mean level or defined value)
 - Down or Up Sampling (by ratio of an integer >1)
-- Cut part of the signal in time (enter a value or by cursor selection)
+- Cut part of the signal in time (enter a value or by cursor selection ; the latter only works on spectrogram)
 - Save as a new .wav file
 #### 3. Main graphs
 - Spectrogram (STFT & 3D)

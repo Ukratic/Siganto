@@ -738,9 +738,10 @@ def cut_signal():
     else:
         start = int(float(start.get())*frame_rate)
     if end.get() =="":
-        end = int(len(iq_wave)/frame_rate)-start
+        end = int((len(iq_wave)/frame_rate)*frame_rate)
     else:
         end = int(float(end.get())*frame_rate)
+    iq_wave = iq_wave[start:end]
     if debug is True:
         print("Signal coupé de ", start, "échantillons à ", end, "échantillons, soit ", end-start, "échantillons restants")
         print("Nouvelle durée du signal : ", len(iq_wave)/frame_rate, " secondes")
