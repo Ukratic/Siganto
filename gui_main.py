@@ -8,7 +8,6 @@ The GUI allows the user to load a WAV file, display its spectrogram, DSP, and ot
 Also, some signal modification functions : apply filters, cut the signal, move center frequency.
 And some estimations, mostly through graphs : Modulation, symbol rate, bandwidth, OFDM parameters.
 
-OFDM estimation : FX Socheleau - IMT Atlantique, 2020
 Many thanks to Dr Marc Lichtman - University of Maryland. Author of PySDR.
 """
 import tkinter as tk
@@ -20,7 +19,7 @@ loading_end = Event()
 def loading_libs():
     # Librairies
     print("Chargement des dépendances...")
-    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm
+    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm, dm, scrolledtext
     import struct
     import gc
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -28,10 +27,12 @@ def loading_libs():
     from matplotlib import cm
     import numpy as np
     import scipy.io.wavfile as wav
+    from tkinter import scrolledtext
     import language_lib as ll
     import estimate_modulation as em
     import main_graphs as mg
     import signal_modification as sm
+    import demod as dm
     # Langue, noms des fonctions, etc.
     lang = ll.get_fra_lib()
     # loading_end.wait() à la fin du script
@@ -63,12 +64,13 @@ print("Chargement des fonctions...")
 filepath = None
 frame_rate = None
 iq_wave = None
+bw = None
 N = 512 # taille de la fenêtre FFT par défaut
 overlap_value = 4 # valeur de recouvrement par défaut
 overlap = N//overlap_value # recouvrement de la STFT
 toolbar = None # toolbar matplotlib
 diff_window = 0 # fenêtre de lissage des transitions
-hist_bins = 250 # bins pour les histogrammes
+hist_bins = 1000 # bins pour les histogrammes
 persistance_bins = 50 # bins pour le spectre de persistance
 window_choice = "hamming" # fenêtre par défaut pour STFT
 # Variables pour curseurs, lignes, et on/off
@@ -176,7 +178,7 @@ def close_wav():
 
 # Fonction des graphes de base
 def plot_initial_graphs():
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, bw
     # Spectrogramme et DSP. 1er sur 2 lignes, 2eme sur 1 ligne
     clear_plot()
     fig= plt.figure()
@@ -229,7 +231,7 @@ def plot_initial_graphs():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     # del var pour libérer la mémoire
-    del stft_matrix, canvas, spec, a0, a1, freqs, times, bw, fmin, fmax, f, Pxx, line, distances, longest_segment_index, x1, y1, x2, y2
+    del stft_matrix, canvas, spec, a0, a1, freqs, times, fmin, fmax, f, Pxx, line, distances, longest_segment_index, x1, y1, x2, y2
 
 # Fonc pour changer la taille de fenêtre FFT
 def define_N():
@@ -442,7 +444,7 @@ def spectre_persistance():
 # paramètres pour le spectre de persistance : nombre de bins
 def param_spectre_persistance():
     global persistance_bins
-    persistance_bins = int(tk.simpledialog.askstring(lang["params"], lang["pers_bins"]))
+    persistance_bins = tk.simpledialog.askstring(lang["params"], lang["pers_bins"])
     if persistance_bins is None:
         persistance_bins = 50
         if debug is True:
@@ -466,6 +468,20 @@ def set_diff_params():
     if debug is True:
         print("Fenêtre de lissage des transitions définie à ", diff_window)
     phase_difference()
+
+# params pour les fonctions de transitions de phase et de fréquence : lissage optionnel
+def set_hist_bins():
+    global hist_bins
+    hist_bins = tk.simpledialog.askstring(lang["params"], lang["smoothing_val"])
+    if hist_bins is None:
+        hist_bins = 1000
+        if debug is True:
+            print("Pas de nombre de bins défini pour les distributions")
+        return
+    hist_bins = int(hist_bins)
+    if debug is True:
+        print("Nombre de bins pour les histogrammes défini à ", hist_bins)
+    frequency_cumulative()
 
 def set_overlap():
     global overlap, overlap_value
@@ -527,9 +543,10 @@ def display_frq_info():
     max_lvl = 10*np.log10(np.max(np.abs(iq_wave)**2))
     low_lvl = 10*np.log10(np.min(np.abs(iq_wave)**2))
     mean_lvl = 10*np.log10(np.mean(np.abs(iq_wave)**2))
-    estim_bw = round(np.abs(mg.estimate_bandwidth(iq_wave, frame_rate, N)[0]),2)
-    estim_speed = round(np.abs(em.mean_threshold_spectrum(iq_wave, frame_rate)[2]),2)
-    estim_speed_2 = round(np.abs(em.power_spectrum_fft(iq_wave, frame_rate)[2]),2)
+    estim_speed_2 = round(np.abs(em.mean_threshold_spectrum(iq_wave, frame_rate)[2]),2)
+    estim_speed = round(np.abs(em.power_spectrum_fft(iq_wave, frame_rate)[2]),2)
+    _,_,_, peak_squared_freq, peak_quartic_freq = em.power_series(iq_wave, frame_rate)
+    estim_speed_3 = [round(abs(peak_squared_freq),2),round(abs(peak_quartic_freq),2)]
     acf_peak = round(np.abs(em.autocorrelation_peak(iq_wave, frame_rate, min_distance=25)[1]),2)
 
     popup = tk.Toplevel()
@@ -538,9 +555,10 @@ def display_frq_info():
     tk.Label(popup, text=f"{lang['high_freq']}: {f_pmax:.2f} Hz. {lang['low_freq']}: {f_pmin:.2f} Hz\n \
                     {lang['high_level']} {max_lvl:.2f}. {lang['low_level']} {low_lvl:.2f}.\n \
                     {lang['mean_level']} {mean_lvl:.2f} dB ").pack()
-    tk.Label(popup, text=f"{lang['estim_bw']} {estim_bw} Hz").pack()
+    tk.Label(popup, text=f"{lang['estim_bw']} {round(bw,2)} Hz").pack()
     tk.Label(popup, text=f"{lang['estim_speed']} {estim_speed} Bds\n \
-                    {lang['estim_speed_2']} {estim_speed_2} Bds").pack()
+                    {lang['estim_speed_2']} {estim_speed_2} Bds\n \
+                    {lang['estim_speed_3']} {estim_speed_3[0]*2} / {estim_speed_3[1]*2} Bds").pack()
     tk.Label(popup, text=f"{lang['acf_peak_txt']} {acf_peak} ms" ).pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
 
@@ -550,10 +568,12 @@ def display_frq_info():
         print("Fréquence à la puissance minimale: ", f_pmin)
         print("Niveau le plus bas: ", low_lvl)
         print("Niveau moyen en dB: ", mean_lvl)
-        print("Largeur de bande estimée: ", estim_bw, " Hz")
-        print("Rapidité de modulation estimée avec la fonction mts: ", estim_speed, " Bauds")
-        print("Rapidité de modulation avec la FFT de puissance classique: ", estim_speed_2, " Bauds")
+        print("Largeur de bande estimée: ", bw, " Hz")
+        print("Rapidité de modulation estimée avec la fonction mts: ", estim_speed_2, " Bauds")
+        print("Rapidité de modulation avec la FFT de puissance classique: ", estim_speed, " Bauds")
+        print("Rapidité de modulation estimée par signal puissance: ", estim_speed_3[0]*2, "/", estim_speed_3[1]*2, "Bauds")
         print("Autocorrélation estimée: ", acf_peak, " ms")
+    del _,estim_speed,estim_speed_2, wav_mag
 
 # Affichage des informations du fichier : nom, encodage, durée, fréquence d'échantillonnage, taille de la fenêtre FFT
 def display_file_info():
@@ -568,7 +588,7 @@ def display_file_info():
         print("Chargé: ", filepath)
         print("Encodage: ", find_sample_width(filepath), " bits")
         print("Echantillons: ", len(iq_wave))
-        print("Fréquence d'échantillonnage: ", frame_rate)
+        print("Fréquence d'échantillonnage: ", frame_rate, " Hz")
         print("Durée: ", len(iq_wave)/frame_rate, " secondes")
         print("Taille fenêtre FFT: ", N)
         print("Recouvrement: ", overlap)
@@ -642,10 +662,13 @@ def apply_filter_band():
     tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.grab_set()
     popup.wait_window()
-    if lowcut.get() == "" or highcut.get() == "":
+    if (lowcut.get() == "" and highcut.get() != "") or (lowcut.get() != "" and highcut.get() == ""):
         tk.messagebox.showinfo(lang["error"], lang["freq_valid"])
         return
-    iq_wave = sm.bandpass_filter(iq_wave, float(lowcut.get()), float(highcut.get()), frame_rate)
+    elif lowcut.get() == "" and highcut.get() == "":
+        return
+    else:
+        iq_wave = sm.bandpass_filter(iq_wave, float(lowcut.get()), float(highcut.get()), frame_rate)
     if debug is True:
         print("Filtre passe-bande appliqué. Fréquence de coupure basse: ", lowcut.get(), "Hz. Fréquence de coupure haute: ", highcut.get(), "Hz")
     plot_initial_graphs()
@@ -731,7 +754,7 @@ def cut_signal():
     popup.grab_set()
     popup.wait_window()
     if start.get() =="" and end.get() =="":
-        tk.messagebox.showinfo(lang["error"], lang["valid_cut"])
+        # tk.messagebox.showinfo(lang["error"], lang["valid_cut"])
         return
     if start.get() =="":
         start = 0
@@ -847,17 +870,21 @@ def pseries():
     f, squared, quartic, peak_squared_freq, peak_quartic_freq = em.power_series(iq_wave, frame_rate)
     ax[0].plot(f, squared)
     ax[0].set_ylabel(f"{lang['mag']} ^2")
-    # if abs(peak_squared_freq[0]) > 25 and abs(peak_squared_freq[1]) > 25 and abs(peak_squared_freq[0])- abs(peak_squared_freq[1]) > 50:
-    #     ax[0].axvline(x=peak_squared_freq[0], color='r', linestyle='--')
-    #     ax[0].axvline(x=peak_squared_freq[1], color='r', linestyle='--')
-    #     ax[0].set_title(f"{lang['estim_peaks']} {round(np.abs(peak_squared_freq[0])+np.abs(peak_squared_freq[1]),2)} Hz")
+    if abs(peak_squared_freq) > 25:
+        ax[0].axvline(x=-peak_squared_freq, color='r', linestyle='--')
+        ax[0].axvline(x=peak_squared_freq, color='r', linestyle='--')
+        ax[0].set_title(f"{lang['estim_peak']} {round(peak_squared_freq,2)} Hz")
+        if debug is True:
+            print("Ecart estimé : ", round(np.abs(peak_squared_freq),2))
     ax[1].plot(f, quartic)
     ax[1].set_ylabel(f"{lang['mag']} ^4")
     ax[1].set_xlabel(f"{lang['freq_xy']} [Hz]")
-    # if abs(peak_quartic_freq[0]) > 25 and abs(peak_quartic_freq[1]) > 25 and abs(peak_quartic_freq[0])- abs(peak_quartic_freq[1]) > 50:
-    #     ax[0].axvline(x=peak_quartic_freq[0], color='r', linestyle='--')
-    #     ax[0].axvline(x=peak_quartic_freq[1], color='r', linestyle='--')
-    #     ax[0].set_title(f"{lang['estim_peaks']} {round(np.abs(peak_quartic_freq[0])+np.abs(peak_quartic_freq[1]),2)} Hz")
+    if abs(peak_quartic_freq) > 25:
+        ax[1].axvline(x=-peak_quartic_freq, color='r', linestyle='--')
+        ax[1].axvline(x=peak_quartic_freq, color='r', linestyle='--')
+        ax[1].set_title(f"{lang['estim_peak']} {round(peak_quartic_freq,2)} Hz")
+        if debug is True:
+            print("Ecart estimé : ", round(np.abs(peak_quartic_freq),2))
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -868,7 +895,7 @@ def pseries():
 
 def dsp():
     # affichage de la densité spectrale de puissance et de la bande passante estimée
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, bw
     print(lang["dsp"])
     print(lang["bandwidth"])
     clear_plot()
@@ -901,7 +928,7 @@ def dsp():
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del bw, fmax, fmin, canvas, f, Pxx, line, distances, longest_segment_index, x1, y1, x2, y2
+    del fmax, fmin, canvas, f, Pxx, line, distances, longest_segment_index, x1, y1, x2, y2
 
 # fonc dsp max
 def dsp_max():
@@ -1010,7 +1037,7 @@ def autocorr_full():
 
 # Fonctions de mesures de transitions de phase et de fréquence
 def phase_difference():
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, diff_window
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["diff_phase"])
@@ -1034,7 +1061,7 @@ def phase_difference():
     del time, phase_diff, canvas
 
 def freq_difference():
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, diff_window
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
     fig.suptitle(lang["diff_freq"])
@@ -1058,7 +1085,7 @@ def freq_difference():
     del time, freq_diff, canvas
 
 def phase_cumulative():
-    # fonc expérimentale de distribution cumulative de phase. A évaluer/améliorer
+    # fonc expérimentale de distribution de phase. A évaluer/améliorer
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -1068,9 +1095,32 @@ def phase_cumulative():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    hist, bins = em.phase_cumulative_distribution(iq_wave, num_bins=1000)
+    hist, bins = em.phase_cumulative_distribution(iq_wave, num_bins=hist_bins)
     ax.plot(bins, hist)
     ax.set_xlabel("Phase [rad]")
+    ax.set_ylabel(lang["density"])
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del hist, bins, canvas
+
+def frequency_cumulative():
+    # fonc expérimentale de distribution fréquence instantanée. A évaluer/améliorer
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(f"{lang['distrib_freq']} ")
+    print(f"{lang['distrib_freq']} ")
+    if not filepath:
+        print(lang["no_file"])
+        return
+    ax = plt.subplot()
+    hist, bins = em.frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=hist_bins)
+    ax.plot(bins, hist)
+    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(lang["density"])
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
@@ -1228,7 +1278,7 @@ def ofdm_results():
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del bw, fmax, fmin, f, Pxx, alpha_0, popup, canvas, distances, longest_segment_index, x1, y1, x2, y2
+    del fmax, fmin, f, Pxx, alpha_0, popup, canvas, distances, longest_segment_index, x1, y1, x2, y2
 
 ## Fonctions de gestion des curseurs
 # Calcule distance entre 2 points
@@ -1397,6 +1447,121 @@ def save_as_wav():
     if debug is True:
         print("Ecriture du nouveau wav")
 
+# Démodulation FSK 2 et 4
+def demod_fsk():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    # transitions de frq
+    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
+    freq_diff /= np.max(np.abs(freq_diff))
+    # vars pour fonctions de démod
+    target_rate = None
+    precision = 0.9
+    order = None
+    mapping = None
+    tau = np.pi * 2
+    # on demande rapidité, ordre et mapping
+    def toggle_mapping():
+        # mapping seulement si ordre 4
+        if param_order.get() == lang["param_order4"]:
+            mapping_nat.config(state=tk.NORMAL)
+            mapping_gray.config(state=tk.NORMAL)
+            param_mapping.set(lang["mapping_nat"])
+        else:
+            mapping_nat.config(state=tk.DISABLED)
+            mapping_gray.config(state=tk.DISABLED)
+    popup = tk.Toplevel()
+    popup.title(lang["demod_param"])
+    popup.geometry("350x250")
+    param_order = tk.StringVar()
+    param_order.set(lang["param_order"])
+    tk.Radiobutton(popup, text=lang["param_order2"], variable=param_order, value=lang["param_order2"], command=toggle_mapping).pack()
+    tk.Radiobutton(popup, text=lang["param_order4"], variable=param_order, value=lang["param_order4"], command=toggle_mapping).pack()
+    param_order.set(lang["param_order2"])
+    target_rate = tk.StringVar()
+    tk.Label(popup, text=lang["demod_speed"]).pack()
+    tk.Entry(popup, textvariable=target_rate).pack()
+    param_mapping = tk.StringVar()
+    param_mapping.set(lang["mapping"])
+    mapping_nat = tk.Radiobutton(popup, text=lang["mapping_nat"], variable=param_mapping, value=lang["mapping_nat"], state=tk.DISABLED)
+    mapping_nat.pack()
+    mapping_gray = tk.Radiobutton(popup, text=lang["mapping_gray"], variable=param_mapping, value=lang["mapping_gray"], state=tk.DISABLED)
+    mapping_gray.pack()
+    tk.Button(popup, text="OK", command=popup.destroy).pack()
+    popup.grab_set()
+    popup.wait_window()
+    if target_rate.get() == "":
+        if debug is True:
+            print("Rapidité de démodulation non définie.")
+        return
+    elif target_rate == 0:
+        print("Pas de rapidité de démodulation définie. Essai aveugle")
+        target_rate = None
+    else:
+        target_rate = float(target_rate.get())
+    if param_order.get() == lang["param_order2"]:
+        order = 2
+    elif param_order.get() == lang["param_order4"]:
+        order = 4
+    if param_mapping.get() == lang["mapping_nat"]:
+        mapping = "natural"
+    elif param_mapping.get() == lang["mapping_gray"]:
+        mapping = "grey"
+
+    # fonction de démod et slice bits en fonction de l'ordre
+    try:
+        symbols, clock = dm.wpcr(freq_diff, frame_rate, target_rate, tau, precision, debug)
+        if len(symbols) > 2 and order == 2:
+            bits=dm.slice_binary(symbols)
+        elif len(symbols) > 2 and order == 4:
+            bits = dm.slice_4fsk(symbols,mapping)
+        else:
+            bits=0
+        # plot des bits demodulés
+        clear_plot()
+        fig = plt.figure()
+        fig.suptitle(lang["estim_bits"])
+        if not filepath:
+            print(lang["no_file"])
+            return
+        ax = plt.subplot()
+        if len(bits) > 5000: # graphe allégé si signal long
+            bits_plot = bits[:5000]
+            fig.suptitle(f"{lang['estim_bits']} {lang["short_bits"]}")
+        else:
+            bits_plot = bits
+        ax.plot(bits_plot, "o-")
+        ax.set_xlabel("Bits")
+        ax.set_ylabel(lang["bits_value"])
+    except :
+        clear_plot()
+        fig = plt.figure()
+        fig.suptitle(lang["bits_fail"])
+        ax = plt.subplot()
+        ax.plot(0)
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    # text box pour les bits démodulés sous format txt qui pourront être copiés
+    text_box = scrolledtext.ScrolledText(plot_frame,height=6, wrap=tk.NONE)
+    text_box.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+    text_box.config(state=tk.NORMAL)  # Temporarily enable text box
+    try:
+        text_output= f"{lang['estim_bits']} ({len(bits)}). {lang['clock_frequency']} {clock} Hz : \n"
+        # lignes de bits
+        bits_per_line = 64  # formattage à ajuster
+        bit_lines = ["".join(map(str, bits[i:i+bits_per_line])) for i in range(0, len(bits), bits_per_line)]
+        formatted_bits = "\n".join(bit_lines)
+        text_output += formatted_bits
+    except:
+        bits,bits_plot,formatted_bits = "","",""
+        text_output = lang["bits_fail"]
+    text_box.insert(tk.END, text_output)
+    text_box.config(state=tk.DISABLED)
+    del canvas, time, freq_diff, bits, bits_plot, formatted_bits, text_output, text_box
+
+
 # Fonc de changement de langue. Recharge les labels des boutons et des menus. Couvre FR et EN uniquement
 def change_lang():
     global lang
@@ -1409,9 +1574,8 @@ def change_lang():
 
 def load_lang_changes():
     global lang
-    # delete all cascade and menu items if they exist
+    # supprime cascade & menu items
     menu_bar.delete(0, tk.END)
-
     # Barre de menu
     graphs_menu = tk.Menu(menu_bar, tearoff=0)
     info_menu = tk.Menu(menu_bar, tearoff=0)
@@ -1420,15 +1584,17 @@ def load_lang_changes():
     diff_menu = tk.Menu(menu_bar, tearoff=0)
     acf_menu = tk.Menu(menu_bar, tearoff=0)
     ofdm_menu = tk.Menu(menu_bar, tearoff=0)
-    time_menu = tk.Menu(menu_bar, tearoff=0)
+    freq_menu = tk.Menu(menu_bar, tearoff=0)
+    demod_menu = tk.Menu(menu_bar, tearoff=0)
     menu_bar.add_cascade(label=lang["display"], menu=info_menu)
     menu_bar.add_cascade(label=lang["modify"], menu=mod_menu)
     menu_bar.add_cascade(label=lang["main_viz"], menu=graphs_menu)
-    menu_bar.add_cascade(label=lang["time_estimate"], menu=time_menu)
     menu_bar.add_cascade(label=lang["power_estimate"], menu=power_menu)
-    menu_bar.add_cascade(label=lang["transitions_estimate"], menu=diff_menu)
+    menu_bar.add_cascade(label=lang["freq_estimate"], menu=freq_menu)
+    menu_bar.add_cascade(label=lang["phase_estimate"], menu=diff_menu)
     menu_bar.add_cascade(label=lang["cyclo_estimate"], menu=acf_menu)
     menu_bar.add_cascade(label=lang["ofdm"], menu=ofdm_menu)
+    menu_bar.add_cascade(label=lang["demod"], menu=demod_menu)
     # Redéfinit les labels des boutons
     load_button.config(text=lang["load"])
     close_button.config(text=lang["close"])
@@ -1449,6 +1615,7 @@ def load_lang_changes():
     info_menu.add_command(label=lang_switch, command=change_lang)
     info_menu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
     info_menu.add_command(label=lang["param_spectre_persistance"], command=param_spectre_persistance)
+    info_menu.add_command(label=lang["param_hist_bins"],command=set_hist_bins)
     info_menu.add_command(label=lang["fft_size"], command=define_N)
     info_menu.add_command(label=lang["set_window"], command=set_window)
     info_menu.add_command(label=lang["set_overlap"], command=set_overlap)
@@ -1471,21 +1638,28 @@ def load_lang_changes():
     power_menu.add_command(label=lang["pseries"], command=pseries)
     power_menu.add_command(label=lang["dsp"], command=dsp)
     power_menu.add_command(label=lang["dsp_max"], command=dsp_max)
+    power_menu.add_command(label=lang["time_amp"], command=time_amplitude)
     # Phase
     diff_menu.add_command(label=lang["constellation"], command=constellation)
     diff_menu.add_command(label=lang["phase_spectrum"], command=phase_spectrum)
     diff_menu.add_command(label=lang["distrib_phase"], command=phase_cumulative)
-    # Temps
-    time_menu.add_command(label=lang["time_amp"], command=time_amplitude)
-    time_menu.add_command(label=lang["persist_spectrum"], command=spectre_persistance)
-    time_menu.add_command(label=lang["diff_phase"], command=phase_difference)
-    time_menu.add_command(label=lang["diff_freq"], command=freq_difference)
+    diff_menu.add_command(label=lang["diff_phase"], command=phase_difference)
+    # Frequence
+    freq_menu.add_command(label=lang["diff_freq"], command=freq_difference)
+    freq_menu.add_command(label=lang["distrib_freq"], command=frequency_cumulative)
+    freq_menu.add_command(label=lang["persist_spectrum"], command=spectre_persistance)
     # ACF
     acf_menu.add_command(label=lang["autocorr"], command=autocorr)
     acf_menu.add_command(label=lang["autocorr_full"], command=autocorr_full)
     # OFDM
-    ofdm_menu.add_command(label=lang["ofdm"], command=alpha_from_symbol)
+    ofdm_menu.add_command(label=lang["ofdm_symbol"], command=alpha_from_symbol)
     ofdm_menu.add_command(label=lang["ofdm_results"], command=ofdm_results)
+    # Demod
+    demod_menu.add_command(label=lang["demod_fsk"], command=demod_fsk)
+    # demod_menu.add_command(label=lang["demod_psk"], command=demod_psk)
+    # Decod
+    # decod_menu.add_command(label=lang[])
+
 
 # Label d'infos au départ
 info_label = tk.Label(root, text=lang["load_msg"])

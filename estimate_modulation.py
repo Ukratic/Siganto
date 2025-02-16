@@ -49,17 +49,26 @@ def power_series(iq_wave, frame_rate):
     # puissance du signal au carré
     samples_squared = iq_wave**2
     squared_metric = np.abs(np.fft.fftshift(np.fft.fft(samples_squared)))/len(iq_wave)
-    squared_metric[len(squared_metric)//2] = 0 # retire la composante DC, c'est-à-dire la moyenne du signal.
-    peak_squared_index = (-squared_metric).argsort()[:2]
-    peak_squared_freq1,peak_squared_freq2 = f[peak_squared_index[0]],f[peak_squared_index[1]]
-    peak_squared_freq = [peak_squared_freq1,peak_squared_freq2]
+    discard_dc = np.abs(squared_metric)
+    zero_index = np.abs(f).argmin()
+    discard_dc[zero_index-10:zero_index+10] = 0
+    peak_freq_index = np.argmax(discard_dc)
+    peak_squared_freq = f[peak_freq_index]
+    # pas de pic de fréquence si ce n'est pas clairement au-dessus du bruit
+    if np.max(discard_dc) < 2*np.mean(discard_dc):
+        peak_squared_freq = 0
     # puissance du signal à la puissance 4
     samples_quartic = iq_wave**4
     quartic_metric = np.abs(np.fft.fftshift(np.fft.fft(samples_quartic)))/len(iq_wave)
     quartic_metric[len(quartic_metric)//2] = 0
-    peak_quartic_index = (-quartic_metric).argsort()[:2]
-    peak_quartic_freq1,peak_quartic_freq1 = f[peak_quartic_index[0]],f[peak_quartic_index[1]]  
-    peak_quartic_freq = [peak_quartic_freq1,peak_quartic_freq1]
+    discard_dc = np.abs(quartic_metric)
+    zero_index = np.abs(f).argmin()
+    discard_dc[zero_index-10:zero_index+10] = 0
+    peak_freq_index = np.argmax(discard_dc)
+    peak_quartic_freq = f[peak_freq_index]
+    # pas de pic de fréquence si ce n'est pas clairement au-dessus du bruit
+    if np.max(discard_dc) < 2*np.mean(discard_dc):
+        peak_quartic_freq = 0
 
     return f, squared_metric, quartic_metric, peak_squared_freq, peak_quartic_freq
 
@@ -133,6 +142,17 @@ def frequency_transitions(iq_wave, frame_rate, window_size=5):
         time = np.arange(0, len(smoothed_freq)) / frame_rate
 
     return time, inst_freq
+
+# Mesures de fréquence cumulée
+def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
+    # Calcul de la fréquence instantanée 
+    phase = np.angle(iq_wave)
+    inst_freq = np.diff(phase) / (2 * np.pi) * frame_rate
+    # Histogramme de la fréquence instantanée cumulée
+    hist, bins = np.histogram(phase, bins=num_bins, density=True)
+    bins = bins[:-1]
+
+    return hist, bins
 
 ##
 # ACF 
