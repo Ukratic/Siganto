@@ -32,7 +32,7 @@ def get_fra_lib():
         "cursors_off": "Curseurs: OFF",
         "clear_cursors": "Retirer curseurs",
         "modify": "Modifier Signal",
-        "move_frq": "Déplacer la fréquence centrale",
+        "move_frq": "Déplacer la fréquence centrale (valeurs)",
         "high_low": "Filtre passe-bas ou passe-haut",
         "low_val": "Bas",
         "high_val": "Haut",
@@ -92,7 +92,7 @@ def get_fra_lib():
         "confirm_wait" : "Cela peut prendre du temps. Continuer?",
         "smoothing_val": "Entrez une valeur de lissage des transitions (désactivé par défaut) :",
         "alpha": "Recherche de l'alpha optimal",
-        "estim_tu": "Entrer la valeur estimée de la durée symbole OFDM (par la fonction d'autocorrélation) :",
+        "estim_tu": "Entrer la valeur estimée de la durée symbole OFDM (en ms, par la fonction d'autocorrélation) :",
         "alpha0": "Entrer le décalage alpha0 en Hz:",
         "ofdm_results": "Caractérisation Sous-Porteuses OFDM",
         "tu": "Temps utile OFDM",
@@ -160,6 +160,10 @@ def get_fra_lib():
         "mapping_nat" : "Naturel",
         "mapping_gray" : "Gray",
         "clock_frequency" : "Fréquence horloge détectée",
+        "center_frq" : "Fréquence centrale",
+        "auto_center" : "Correction automatique",
+        "filtrer" : "Filtrer signal",
+        "fft_options" : "Options FFT",
     
     }
     return fra_lib
@@ -197,7 +201,7 @@ def get_eng_lib():
         "cursors_off": "Cursors: OFF",
         "clear_cursors": "Remove cursors",
         "modify": "Modify Signal",
-        "move_frq": "Move center frequency",
+        "move_frq": "Move center frequency (values)",
         "high_low": "High/Low pass filter",
         "low_val": "Low",
         "high_val": "High",
@@ -257,7 +261,7 @@ def get_eng_lib():
         "confirm_wait" : "This may take some time. Continue?",
         "smoothing_val": "Enter a smoothing value for transitions (disabled by default) :",
         "alpha": "Optimal alpha search",
-        "estim_tu": "Enter the estimated OFDM symbol duration value (from the autocorrelation function) :",
+        "estim_tu": "Enter the estimated OFDM symbol duration value (in ms, from the autocorrelation function) :",
         "alpha0": "Enter the alpha0 offset in Hz :",
         "ofdm_results": "OFDM Parameters Estimation",
         "tu": "OFDM Symbol Duration",
@@ -324,6 +328,10 @@ def get_eng_lib():
         "mapping_nat" : "Natural",
         "mapping_gray" : "Gray",
         "clock_frequency" : "Detected clock frequency",
+        "center_frq" : "Center Frequency",
+        "auto_center" : "Automatic offset correction",
+        "filtrer" : "Filter signal",
+        "fft_options" : "FFT options",
 
     }
     return eng_lib

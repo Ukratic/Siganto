@@ -19,7 +19,7 @@ loading_end = Event()
 def loading_libs():
     # Librairies
     print("Chargement des dépendances...")
-    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm, dm, scrolledtext
+    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm, df, dm, scrolledtext
     import struct
     import gc
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -32,6 +32,7 @@ def loading_libs():
     import estimate_modulation as em
     import main_graphs as mg
     import signal_modification as sm
+    import dsp_funcs as df
     import demod as dm
     # Langue, noms des fonctions, etc.
     lang = ll.get_fra_lib()
@@ -80,6 +81,7 @@ distance_text = None # distance entre les curseurs
 cursor_mode = False  # on/off
 click_event_id = None
 peak_indices = []
+center_method = 'defaut'
 # messages de debug
 debug = True
 
@@ -352,7 +354,6 @@ def set_window():
     tk.Radiobutton(popup, text="Flat Top", variable=window_list, value="flattop").pack()
     tk.Radiobutton(popup, text="Rectangular", variable=window_list, value="rect").pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
-    popup.grab_set()
     popup.wait_window()
     window_choice = window_list.get()
 
@@ -633,7 +634,6 @@ def apply_filter_high_low():
     tk.Label(popup, text=lang["freq_pass"]).pack()
     tk.Entry(popup, textvariable=cutoff).pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
-    popup.grab_set()
     popup.wait_window()
     if cutoff.get() == "":
         if debug is True:
@@ -660,7 +660,6 @@ def apply_filter_band():
     tk.Label(popup, text=lang["freq_high"]).pack()
     tk.Entry(popup, textvariable=highcut).pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
-    popup.grab_set()
     popup.wait_window()
     if (lowcut.get() == "" and highcut.get() != "") or (lowcut.get() != "" and highcut.get() == ""):
         tk.messagebox.showinfo(lang["error"], lang["freq_valid"])
@@ -689,7 +688,6 @@ def mean_filter():
     tk.Radiobutton(popup, text=lang["apply_mean"], variable=mean_filter, value=lang["apply_mean"]).pack()
     tk.Radiobutton(popup, text=lang["def_level"], variable=mean_filter, value=lang["def_level"]).pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
-    popup.grab_set()
     popup.wait_window()
     if mean_filter.get() == lang["def_level"]:
         iq_floor = float(tk.simpledialog.askstring(lang["level"], lang["enter_level"]))
@@ -751,7 +749,6 @@ def cut_signal():
     tk.Label(popup, text=lang["end_cut"]).pack()
     tk.Entry(popup, textvariable=end).pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
-    popup.grab_set()
     popup.wait_window()
     if start.get() =="" and end.get() =="":
         # tk.messagebox.showinfo(lang["error"], lang["valid_cut"])
@@ -793,6 +790,21 @@ def cut_signal_cursors():
             print("Nouvelle durée du signal : ", len(iq_wave)/frame_rate, " secondes")
     plot_initial_graphs()
     display_file_info()
+
+def center_signal():
+    global iq_wave
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # methode en fonction du nb echantillons pour éviter ralentissements
+    if len(iq_wave) < 1e6:
+        iq_wave, center = df.center_signal(iq_wave, frame_rate, proeminence=0.1)
+    elif len(iq_wave) >= 1e6 or center_method != 'defaut':
+        iq_wave, center = em.center_signal(iq_wave, frame_rate)
+    if debug is True:
+        print(f"Signal centré par déplacement de {round(center, 2)} Hz.")
+
+    plot_initial_graphs()
 
 # Fonctions de mesure de la rapidité de modulation
 def psf():
@@ -1487,7 +1499,6 @@ def demod_fsk():
     mapping_gray = tk.Radiobutton(popup, text=lang["mapping_gray"], variable=param_mapping, value=lang["mapping_gray"], state=tk.DISABLED)
     mapping_gray.pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
-    popup.grab_set()
     popup.wait_window()
     if target_rate.get() == "":
         if debug is True:
@@ -1602,30 +1613,43 @@ def load_lang_changes():
     clear_button.config(text=lang["clear_cursors"])
     info_label.config(text=lang["load_msg"])
     peak_button.config(text=lang["peak_find"])
-    # Options des menus cascade
-    # Graphes : spectre, STFT, 3D, taille FFT
+    # Fonctions des menus cascade
+    # Graphes : spectrogramme, STFT, 3D
     graphs_menu.add_command(label=lang["group_spec"], command=plot_initial_graphs)
     graphs_menu.add_command(label=lang["group_const"], command=plot_other_graphs)
     graphs_menu.add_command(label=lang["spec_3d"], command=plot_3d_spectrogram)
     graphs_menu.add_command(label=lang["spectrogram"], command=stft_solo)
-    # Ajouter des infos sur le signal
+    # Quelques infos sur le signal & résultats automatiques
     info_menu.add_command(label=lang["frq_info"], command=display_frq_info)
+    # Submenu params graphes
+    param_submenu = tk.Menu(info_menu,tearoff=0)
+    param_submenu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
+    param_submenu.add_command(label=lang["param_spectre_persistance"], command=param_spectre_persistance)
+    param_submenu.add_command(label=lang["param_hist_bins"],command=set_hist_bins)
+    info_menu.add_cascade(label=lang["params"], menu=param_submenu)
+    # Submenu FFT
+    fft_submenu = tk.Menu(info_menu,tearoff=0)
+    fft_submenu.add_command(label=lang["fft_size"], command=define_N)
+    fft_submenu.add_command(label=lang["set_window"], command=set_window)
+    fft_submenu.add_command(label=lang["set_overlap"], command=set_overlap)
+    info_menu.add_cascade(label=lang["fft_options"], menu=fft_submenu)
     # Changer langue. Label "English" si langue = fr, "Français" si langue = en
     lang_switch = "Switch language: English" if lang['lang'] == "Français" else "Changer langue: Français"
     info_menu.add_command(label=lang_switch, command=change_lang)
-    info_menu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
-    info_menu.add_command(label=lang["param_spectre_persistance"], command=param_spectre_persistance)
-    info_menu.add_command(label=lang["param_hist_bins"],command=set_hist_bins)
-    info_menu.add_command(label=lang["fft_size"], command=define_N)
-    info_menu.add_command(label=lang["set_window"], command=set_window)
-    info_menu.add_command(label=lang["set_overlap"], command=set_overlap)
     # Modifications du signal
-    mod_menu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
-    mod_menu.add_command(label=lang["filter_band"], command=apply_filter_band)
-    # Filtrage curseurs à ajouter
-    mod_menu.add_command(label=lang["move_frq"], command=move_frequency)
-    mod_menu.add_command(label=lang["move_freq_cursors"], command=move_frequency_cursors)
-    mod_menu.add_command(label=lang["mean"], command=mean_filter)
+    # Submenu Filtre
+    filter_submenu = tk.Menu(mod_menu,tearoff=0)
+    filter_submenu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
+    filter_submenu.add_command(label=lang["filter_band"], command=apply_filter_band)
+    filter_submenu.add_command(label=lang["mean"], command=mean_filter)
+    mod_menu.add_cascade(label=lang["filtrer"], menu=filter_submenu)
+    # Submenu FC
+    move_submenu = tk.Menu(mod_menu,tearoff=0)
+    move_submenu.add_command(label=lang["move_frq"], command=move_frequency)
+    move_submenu.add_command(label=lang["move_freq_cursors"], command=move_frequency_cursors)
+    move_submenu.add_command(label=lang["auto_center"],command=center_signal)
+    mod_menu.add_cascade(label=lang["center_frq"],menu=move_submenu)
+    # sampling & cutting
     mod_menu.add_command(label=lang["downsample"], command=downsample_signal)
     mod_menu.add_command(label=lang["upsample"], command=upsample_signal)
     mod_menu.add_command(label=lang["cut"], command=cut_signal)

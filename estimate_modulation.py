@@ -255,4 +255,23 @@ def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
         else:
             continue
     N = N - 1
+
     return Tu, Tg, Ts, Df, N
+
+# Fonc pour centrer signal entre 2 pics de spectre signal^n
+def center_signal(iq_wave,frame_rate):
+    f, squared, _, peak_squared_freq, _ = power_series(iq_wave, frame_rate)
+    # cherches index 2 pics proeminents (neg & pos)
+    peak_indices = np.argsort(squared)[-2:]
+    peak_freqs = np.sort(f[peak_indices])
+    if len(peak_freqs) < 2:
+        print("Moins de 2 pics trouvés pour recentrer le signal.")
+        return
+
+    peak_neg, peak_pos = peak_freqs
+    # Div par 4 : signal**2
+    center_freq = (peak_pos + peak_neg) / 4 
+    # applique shift
+    iq_wave = iq_wave * np.exp(-1j * 2 * np.pi * center_freq * np.arange(len(iq_wave)) / frame_rate)
+
+    return iq_wave, center_freq
