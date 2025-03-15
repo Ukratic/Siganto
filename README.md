@@ -32,7 +32,7 @@ Overlap.
 - Save as a new .wav file
 #### 3. Main graphs
 - Spectrogram (STFT & 3D)
-- Groups with several graphs on the same window
+- Groups combining graphs on the same window
 #### 4. Power Metrics
 - Power Spectrum FFT (and variant)
 - Signal power
@@ -55,21 +55,21 @@ Overlap.
 - 2 & 4 FSK Demodulation
 
 ### Examples :
-- Spectrogram of a Chinese 4+4 signal <br>
+- Spectrogram of a Chinese 4+4 <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.png" alt="4_4"/>
-- Constellation of a dPMR signal <br>
+- dPMR Constellation <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.png" alt="dPMR"/>
-- PSD of a IS-95 (CDMA) signal <br>
+- PSD of IS-95 (CDMA) <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="WiFi"/>
-- Symbol rate of a TETRA signal <br>
+- TETRA Symbol rate <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_5.png" alt="TETRA"/>
-- Autocorrelation of a TETRAPOL signal <br>
+- TETRAPOL Autocorrelation Function <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_6.png" alt="TETRAPOL"/>
-- Results of a CIS-45 OFDM signal <br>
+- CIS-45 OFDM Parameters <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="CIS-45"/>
-- Frequency transitions of an AIS signal <br>
+- AIS Frequency transitions <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_8.png" alt="FSK_transitions"/>
-- Demodulation of an EDACS signal <br>
+- EDACS Demodulation <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_9.png" alt="FSK_demod"/>
 
 ### Changelog :
@@ -87,7 +87,9 @@ Overlap.
 -- Executable *SigAnto_v1.06* available.
 
 - In future versions : <br>
--- Automatic modulation recognition, if I can figure out a decent algorithm.
+-- Decoding of some protocols
+-- FM/AM demod
+-- Further analysis
 
 ### Using the app
 1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file *gui_main.py* to launch.<br>

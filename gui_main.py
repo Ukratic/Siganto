@@ -473,7 +473,7 @@ def set_diff_params():
 # params pour les fonctions de transitions de phase et de fréquence : lissage optionnel
 def set_hist_bins():
     global hist_bins
-    hist_bins = tk.simpledialog.askstring(lang["params"], lang["smoothing_val"])
+    hist_bins = tk.simpledialog.askstring(lang["params"], lang["hist_bins"])
     if hist_bins is None:
         hist_bins = 1000
         if debug is True:

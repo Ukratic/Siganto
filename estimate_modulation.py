@@ -149,7 +149,7 @@ def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
     phase = np.angle(iq_wave)
     inst_freq = np.diff(phase) / (2 * np.pi) * frame_rate
     # Histogramme de la fréquence instantanée cumulée
-    hist, bins = np.histogram(phase, bins=num_bins, density=True)
+    hist, bins = np.histogram(inst_freq, bins=num_bins, density=True)
     bins = bins[:-1]
 
     return hist, bins
