@@ -1,11 +1,12 @@
-# Fonctions DSP à ajouter si/quand nécessaire
+"""Fonctions DSP annexes"""
 import numpy as np
 
 # Flattop window
 def flattop_window(N):
+    """Fenêtre flattop pour la FFT"""
     if N < 1:
         return np.array([])
-    
+
     # Coefficients pour la fenêtre Flattop (source : implémentation Octave de Flattop Harris)
     a0 = 1.0
     a1 = 1.93
@@ -24,6 +25,7 @@ def flattop_window(N):
 
 # Fonctions pour centrer signal
 def find_peaks_prominence(spectrum, proeminence=0.1): # imite scipy.signal.find_peaks
+    """Recherche de pics proéminents"""
     peaks = []
     for i in range(1, len(spectrum) - 1):
         is_peak = True
@@ -39,7 +41,8 @@ def find_peaks_prominence(spectrum, proeminence=0.1): # imite scipy.signal.find_
             peaks.append(i)
     return np.array(peaks)
 
-def center_signal(iq_wave, frame_rate, proeminence=0.1): 
+def center_signal(iq_wave, frame_rate, proeminence=0.1):
+    """Fonction de centrage du signal sur pics proéminents"""
     N = len(iq_wave)
     t = np.arange(N) / frame_rate
 

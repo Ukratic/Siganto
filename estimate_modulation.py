@@ -1,9 +1,8 @@
 """
-Functions to estimate modulation parameters of an IQ signal :
-- Estimate modulation speed (symbol rate), phase, autocorrelation
-- Measure OFDM modulation parameters : ## Author (matlab code adapted here in python) : FX Socheleau - IMT Atlantique, 2020 ##
+Fonctions d'estimation des paramètres de modulation d'un signal IQ :
+- Rapidité de modulation, autocorrelation, transitions phase & fréquence
+- Mesures OFDM : ## FX Socheleau - IMT Atlantique, 2020 ## (code matlab source adapté ici en python)
 """
-# Comments in French below
 
 import numpy as np
 ##
@@ -11,6 +10,7 @@ import numpy as np
 ##
 
 def power_spectrum_fft(iq_wave, frame_rate):
+    """FFT de puissance"""
     spectrum = np.abs(iq_wave) ** 2
     spectrum_fft = np.fft.fft(spectrum, len(iq_wave))
     spectrum_fft = np.fft.fftshift(spectrum_fft)
@@ -26,6 +26,7 @@ def power_spectrum_fft(iq_wave, frame_rate):
     return spectrum_fft, f, peak_freq
 
 def mean_threshold_spectrum(iq_wave, frame_rate):
+    """FFT de puissance alternative"""
     # seuil de la moyenne et calcul des pulses pour la détection de la fréquence de modulation
     midpoint = iq_wave > np.mean(iq_wave)
     pulse = np.diff(midpoint)**2
@@ -45,6 +46,7 @@ def mean_threshold_spectrum(iq_wave, frame_rate):
     return clock, f, peak_freq
 
 def power_series(iq_wave, frame_rate):
+    """Signal puissance 2 et 4"""
     f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave))
     # puissance du signal au carré
     samples_squared = iq_wave**2
@@ -78,7 +80,7 @@ def power_series(iq_wave, frame_rate):
 
 # Spectre de persistance
 def persistance_spectrum(iq_wave, frame_rate, N, power_bins=50):
-    # spectrogramme
+    """Spectre de persistance des fréquences"""
     num_rows = len(iq_wave) // N
     spectrogram = np.zeros((num_rows, N))
     for i in range(num_rows):
@@ -98,12 +100,12 @@ def persistance_spectrum(iq_wave, frame_rate, N, power_bins=50):
     # normalisation
     persistence = persistence / np.max(persistence)
     f= np.fft.fftshift(np.fft.fftfreq(N, 1 / frame_rate))
-    
+
     return f, min_power, max_power, persistence
 
 # Visualiser la phase dans le domaine temporel
 def phase_time_angle(iq_wave, frame_rate, window_size=5):
-    # Calcul de la phase
+    """Transitions de phase"""
     phase = np.angle(iq_wave)
     # Lissage de la phase
     if window_size > 1:
@@ -118,7 +120,7 @@ def phase_time_angle(iq_wave, frame_rate, window_size=5):
 
 # Mesures de phase cumulée
 def phase_cumulative_distribution(iq_wave, num_bins=250):
-    # Calcul de la phase cumulée
+    """Distribution de phase"""
     phase = np.angle(iq_wave)
     # Histogramme de la phase cumulée avec les valeurs de phase positives
     hist, bins = np.histogram(phase, bins=num_bins, density=True)
@@ -129,7 +131,7 @@ def phase_cumulative_distribution(iq_wave, num_bins=250):
     return hist, bins
 
 def frequency_transitions(iq_wave, frame_rate, window_size=5):
-    # Phase instantanee
+    """Transitions de fréquence"""
     phase = np.unwrap(np.angle(iq_wave))
     # Freq instantanee derivee de la phase
     inst_freq = np.diff(phase) / (2 * np.pi) * frame_rate
@@ -145,7 +147,7 @@ def frequency_transitions(iq_wave, frame_rate, window_size=5):
 
 # Mesures de fréquence cumulée
 def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
-    # Calcul de la fréquence instantanée 
+    """Distribution de fréquence"""
     phase = np.angle(iq_wave)
     inst_freq = np.diff(phase) / (2 * np.pi) * frame_rate
     # Histogramme de la fréquence instantanée cumulée
@@ -155,11 +157,12 @@ def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
     return hist, bins
 
 ##
-# ACF 
+# ACF
 ##
 
 # Autocorrelation rapide
 def autocorrelation(iq_wave, frame_rate=None):
+    """Fonction d'autocorrélation sur la FFT"""
     n = len(iq_wave)
     n_padded = 2**np.ceil(np.log2(2 * n - 1)).astype(int)
     # FFT du signal pour l'autocorrelation
@@ -173,31 +176,32 @@ def autocorrelation(iq_wave, frame_rate=None):
     # Convertir lags en temps
     if frame_rate is not None:
         lags = lags / frame_rate
-    
+
     return yx, lags
 
 def autocorrelation_peak(iq_wave, frame_rate, min_distance=1):
-    # Fonction d'autocorrelation
+    """Recherche de pic d'autocorrélation"""
     yx, lags = autocorrelation(iq_wave, frame_rate)
     # Trouver le pic en excluant zéro
     yx[0] = 0
     peak_index = np.argmax(yx[min_distance:]) + min_distance
     peak_value = yx[peak_index]
-    lag_time_ms = (lags[peak_index] * 1000)  # s -> ms
+    lag_time_ms = lags[peak_index] * 1000  # s -> ms
 
     return peak_value, lag_time_ms
 
 def autocorrelation_peak_from_acf(yx, lags, min_distance=1):
-    # Trouver le pic en excluant zéro
+    """Rechercher le pic d'autocorrélation sans recalculer"""
     yx[0] = 0
     peak_index = np.argmax(yx[min_distance:]) + min_distance
     peak_value = yx[peak_index]
-    lag_time_ms = (lags[peak_index] * 1000)  # s -> ms
+    lag_time_ms = lags[peak_index] * 1000  # s -> ms
 
     return peak_value, lag_time_ms
 
 # Autocorrelation complète (lente)
 def full_autocorrelation(iq_wave):
+    """Fonction d'autocorrélation sur le signal complexe"""
     yx, lags = np.correlate(iq_wave, iq_wave, mode='full'), np.arange(-len(iq_wave)+1, len(iq_wave))
     # les valeurs négatives de lags sont ignorées = doublons
     yx = yx[len(iq_wave)-1:]
@@ -212,7 +216,7 @@ def full_autocorrelation(iq_wave):
 ##
 
 def estimate_ofdm_symbol_duration(iq_wave, frame_rate, min_distance=1):
-    # Autocorrelation
+    """Estimation de durée symbole OFDM avec la fonction d'autocorrélation"""
     yx, lags = full_autocorrelation(iq_wave)
     # Peak
     peak_index = np.argmax(yx[min_distance:]) + min_distance
@@ -223,7 +227,7 @@ def estimate_ofdm_symbol_duration(iq_wave, frame_rate, min_distance=1):
     return peak_value, lag_time_ms
 
 def estimate_alpha(iq_wave, frame_rate, estimated_ofdm_symbol_duration):
-    # estime écart de fréquence alpha à partir de la CAF
+    """Estimation écart de fréquence alpha à partir de la fonction d'autocorrélation"""
     index_delay  = round(estimated_ofdm_symbol_duration*1e-3*frame_rate) # delay index
     conj = iq_wave[0:-index_delay]*np.conj(iq_wave[index_delay:])
     caf = np.fft.fftshift(np.fft.fft(conj))
@@ -239,9 +243,9 @@ def estimate_alpha(iq_wave, frame_rate, estimated_ofdm_symbol_duration):
     return alpha_peak, alpha, np.abs(caf)
 
 def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
+    """Calcul des paramètres OFDM à partir de la fréquence alpha, durée symbole OFDM et BW"""
     cy_px = (1/abs(alpha0/1e3)) - estimated_ofdm_symbol_duration
     Df = 1/estimated_ofdm_symbol_duration
-    cy_px = cy_px
     Df = Df*1e3
     Tu = estimated_ofdm_symbol_duration
     Tg = round(cy_px,5)
@@ -252,25 +256,25 @@ def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
     for N in range(1, 25000):
         if N*Df >= bandwidth:
             break
-        else:
-            continue
+
     N = N - 1
 
     return Tu, Tg, Ts, Df, N
 
 # Fonc pour centrer signal entre 2 pics de spectre signal^n
 def center_signal(iq_wave,frame_rate):
-    f, squared, _, peak_squared_freq, _ = power_series(iq_wave, frame_rate)
+    """Fonction de recentrage FC avec les pics de signal puissance 2"""
+    f, squared, _, _, _ = power_series(iq_wave, frame_rate)
     # cherches index 2 pics proeminents (neg & pos)
     peak_indices = np.argsort(squared)[-2:]
     peak_freqs = np.sort(f[peak_indices])
     if len(peak_freqs) < 2:
         print("Moins de 2 pics trouvés pour recentrer le signal.")
-        return
+        return iq_wave,0
 
     peak_neg, peak_pos = peak_freqs
     # Div par 4 : signal**2
-    center_freq = (peak_pos + peak_neg) / 4 
+    center_freq = (peak_pos + peak_neg) / 4
     # applique shift
     iq_wave = iq_wave * np.exp(-1j * 2 * np.pi * center_freq * np.arange(len(iq_wave)) / frame_rate)
 

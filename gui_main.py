@@ -740,7 +740,7 @@ def cut_signal():
     # coupure du signal : entrer les points de début et de fin (en secondes)
     global iq_wave, frame_rate
     popup = tk.Toplevel()
-    popup.title(lang["cut"])
+    popup.title(lang["cut_val"])
     popup.geometry("300x200")
     start = tk.StringVar()
     end = tk.StringVar()
@@ -1572,6 +1572,46 @@ def demod_fsk():
     text_box.config(state=tk.DISABLED)
     del canvas, time, freq_diff, bits, bits_plot, formatted_bits, text_output, text_box
 
+def demod_fm():
+    global iq_wave
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # demod fm
+    try:
+        iq_wave = dm.fm_demodulate(iq_wave,frame_rate)
+        if debug is True:
+            print("Démodulation FM réalisée")
+    except:
+        if debug is True:
+            print("Echec de démodulation FM")
+            return
+    plot_other_graphs()
+
+def demod_am():
+    global iq_wave
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # demod am
+    try:
+        iq_wave = dm.am_demodulate(iq_wave)
+        if debug is True:
+            print("Démodulation AM réalisée")
+    except:
+        if debug is True:
+            print("Echec de démodulation AM")
+            return
+    plot_other_graphs()
+
+# def demod_psk():
+#     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+#     # vars & input
+#     # mapping
+#     # popups
+#     # demod func
+#     # graphe & bits output
+#     #
 
 # Fonc de changement de langue. Recharge les labels des boutons et des menus. Couvre FR et EN uniquement
 def change_lang():
@@ -1650,10 +1690,16 @@ def load_lang_changes():
     move_submenu.add_command(label=lang["auto_center"],command=center_signal)
     mod_menu.add_cascade(label=lang["center_frq"],menu=move_submenu)
     # sampling & cutting
-    mod_menu.add_command(label=lang["downsample"], command=downsample_signal)
-    mod_menu.add_command(label=lang["upsample"], command=upsample_signal)
-    mod_menu.add_command(label=lang["cut"], command=cut_signal)
-    mod_menu.add_command(label=lang["cut_cursors"], command=cut_signal_cursors)
+    sample_submenu = tk.Menu(mod_menu,tearoff=0)
+    sample_submenu.add_command(label=lang["downsample"], command=downsample_signal)
+    sample_submenu.add_command(label=lang["upsample"], command=upsample_signal)
+    sample_submenu.add_command(label=lang["auto_center"],command=center_signal)
+    mod_menu.add_cascade(label=lang["resample"],menu=sample_submenu)
+    cut_submenu = tk.Menu(mod_menu,tearoff=0)
+    cut_submenu.add_command(label=lang["cut_val"], command=cut_signal)
+    cut_submenu.add_command(label=lang["cut_cursors"], command=cut_signal_cursors)
+    mod_menu.add_cascade(label=lang["cut_signal"],menu=cut_submenu)
+    # save new wav
     mod_menu.add_command(label=lang["save_wav"], command=save_as_wav)
     # Analyse du signal
     # Puissance
@@ -1680,6 +1726,8 @@ def load_lang_changes():
     ofdm_menu.add_command(label=lang["ofdm_results"], command=ofdm_results)
     # Demod
     demod_menu.add_command(label=lang["demod_fsk"], command=demod_fsk)
+    demod_menu.add_command(label=lang["demod_fm"], command=demod_fm)
+    demod_menu.add_command(label=lang["demod_am"], command=demod_am)
     # demod_menu.add_command(label=lang["demod_psk"], command=demod_psk)
     # Decod
     # decod_menu.add_command(label=lang[])

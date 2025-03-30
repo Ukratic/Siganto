@@ -1,10 +1,14 @@
+"""Script de conversion SigMF vers WAV.
+Expérimental : Prise en compte partielle des schémas possibles"""
+
+import os
+import sys
 import json
 import numpy as np
 import scipy.io.wavfile as wav
-import os
-import sys
 
 def get_filepath():
+    """Chemin du fichier"""
     if len(sys.argv) < 2:
         print("Utilisation : python script.py <input_file.sigmf-meta>")
         sys.exit(1)
@@ -12,10 +16,13 @@ def get_filepath():
     if not os.path.isfile(filepath):
         print(f"Erreur : Vérifier chemin - {filepath}")
         sys.exit(1)
-    
+
     return filepath
 
 def conv_sigmf(metadata_path):
+    """Fonction de conversion
+    -> fichier de métadonnées en argument
+    -> fichier de données dans le même répertoire"""
     # Charge metadonnees en 1er
     with open(metadata_path, 'r') as meta_file:
         metadata = json.load(meta_file)
@@ -25,7 +32,7 @@ def conv_sigmf(metadata_path):
         sample_rate = metadata['global']['core:sample_rate']
         data_format = metadata['global'].get('core:datatype', 'ci16_le')  # Défaut: 16-bit IQ
     except KeyError as e:
-        raise ValueError(f"Métadonnées manquantes : {e}")
+        raise ValueError(f"Métadonnées manquantes : {e}") from e
     print(f"Fréquence d'échantillonnage: {sample_rate} Hz, format : {data_format}")
     print(f"Récupère signal de : {data_file}")
     # Formats en equivalents numpy
@@ -50,7 +57,7 @@ def conv_sigmf(metadata_path):
     imag_part = (iq_data_normalized.imag * 32767).astype(np.int16)
     stereo_data = np.column_stack((real_part, imag_part))
     # Enregistre en wav
-    output_file = metadata_path.replace(".sigmf-meta", ".wav") 
+    output_file = metadata_path.replace(".sigmf-meta", ".wav")
     print(f"Enregistre sous : {output_file}")
     wav.write(output_file, int(sample_rate), stereo_data)
 

@@ -1,4 +1,4 @@
-# Lib de langue pour l'interface graphique de SigAnTo
+"""Lib de langue pour l'interface graphique de SigAnTo"""
 
 def get_fra_lib():
     # load FR
@@ -53,7 +53,7 @@ def get_fra_lib():
         "down_value": "Entrez le taux de sous-échantillonnage (entier) : ",
         "upsample": "Sur-échantillonner",
         "up_value": "Entrez le taux de sur-échantillonnage (entier) : ",
-        "cut": "Couper la durée du signal (valeurs)",
+        "cut_val": "Couper la durée du signal (valeurs)",
         "start_cut": "Entrez le début de la coupure en secondes: ",
         "end_cut": "Entrez la fin de la coupure en secondes: ",
         "valid_cut" : "Entrez des valeurs valides pour la coupure",
@@ -164,7 +164,11 @@ def get_fra_lib():
         "auto_center" : "Correction automatique",
         "filtrer" : "Filtrer signal",
         "fft_options" : "Options FFT",
-    
+        "demod_fm" : "Démodulation FM",
+        "demod_am" : "Démodulation AM",
+        "resample" : "Echantillonner",
+        "cut_signal" : "Découper",
+
     }
     return fra_lib
 
@@ -222,7 +226,7 @@ def get_eng_lib():
         "down_value": "Enter the downsampling ratio (int): ",
         "upsample": "Upsample",
         "up_value": "Enter the upsampling ratio (int): ",
-        "cut": "Cut length of signal (values)",
+        "cut_val": "Cut length of signal (values)",
         "start_cut": "Enter the start of the cut in seconds: ",
         "end_cut": "Enter the end of the cut in seconds: ",
         "valid_cut" : "Enter valid values for the cut",
@@ -332,6 +336,10 @@ def get_eng_lib():
         "auto_center" : "Automatic offset correction",
         "filtrer" : "Filter signal",
         "fft_options" : "FFT options",
+        "demod_fm" : "FM demodulation",
+        "demod_am" : "AM demodulation",
+        "resample" : "Resample",
+        "cut_signal" : "Cut",
 
     }
     return eng_lib

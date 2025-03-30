@@ -1,3 +1,6 @@
+"""Script de conversion mp3.
+Expérimental : Dépendant de la méthode d'encodage"""
+
 import sys
 import os
 from pydub import AudioSegment
@@ -12,7 +15,7 @@ def get_filepath():
     if not os.path.isfile(filepath):
         print(f"Erreur : Vérifier chemin - {filepath}")
         sys.exit(1)
-    
+
     return filepath
 
 def conv_mp3(filepath):
