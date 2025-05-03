@@ -13,13 +13,14 @@ Many thanks to Dr Marc Lichtman - University of Maryland. Author of PySDR.
 import tkinter as tk
 from threading import Thread, Event
 
+with_sound = True
 # Initialisation : chargement des librairies et de la langue dans une fonction pour pouvoir l'intégrer dans un thread
 # Ce thread permet de charger les librairies en arrière-plan avec une fenêtre de chargement, en attendant que tout soit prêt
 loading_end = Event()
 def loading_libs():
     # Librairies
     print("Chargement des dépendances...")
-    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm, df, dm, scrolledtext
+    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm, df, dm, scrolledtext, ttk, sd
     import struct
     import gc
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -34,6 +35,9 @@ def loading_libs():
     import signal_modification as sm
     import dsp_funcs as df
     import demod as dm
+    if with_sound:
+        from tkinter import ttk
+        import sounddevice as sd
     # Langue, noms des fonctions, etc.
     lang = ll.get_fra_lib()
     # loading_end.wait() à la fin du script
@@ -56,7 +60,6 @@ while t.is_alive():
 # Init fenêtre principale
 print("Chargement de l'application...")
 # Fenêtre principale
-# root = tk.Tk()
 root.title(lang["siganto"])
 root.geometry("1024x768")
 menu_bar = tk.Menu(root)
@@ -82,8 +85,14 @@ cursor_mode = False  # on/off
 click_event_id = None
 peak_indices = []
 center_method = 'defaut'
-# messages de debug
+# Messages de debug
 debug = True
+# Audio
+is_playing = False
+is_paused = False
+audio_thread = None
+audio_stream = None
+stream_position = 0
 
 # Frame pour les graphes
 plot_frame = tk.Frame(root)
@@ -1613,6 +1622,104 @@ def demod_am():
 #     # graphe & bits output
 #     #
 
+def prepare_audio(sig):
+    if sig.ndim > 1:
+        sig = sig[:, 0]
+    return np.asarray(sig, dtype=np.float32)
+
+# Play/Pause
+def toggle_playback():
+    global is_playing, is_paused
+    if not is_playing:
+        start_playback()
+    else:
+        # Pause si en cours de playback
+        is_paused = not is_paused
+        play_button.config(text="Resume" if is_paused else "Pause")
+
+def start_playback():
+    global is_playing, is_paused, audio_thread
+    if not is_playing:
+        is_playing = True
+        is_paused = False
+        play_button.config(text="Pause")
+        audio_thread = Thread(target=play_audio)
+        audio_thread.start()
+
+def stop_playback():
+    global is_playing, is_paused, audio_stream, stream_position
+    if audio_stream and stream_position < total_samples :
+        audio_stream.stop()
+        audio_stream.close()
+        audio_stream = None
+    is_playing = False
+    is_paused = False
+    stream_position = 0
+    play_button.config(text="Play")
+
+def play_audio():
+    global audio_stream, stream_position, is_playing, is_paused, total_samples
+
+    try:
+        prepared_audio = prepare_audio(iq_wave) # suppose demodulation deja faite
+        total_samples = len(prepared_audio)
+
+        def audio_callback(outdata, frames, time, status):
+            global stream_position, is_paused, is_playing
+
+            if status:
+                print(status)
+
+            if not is_playing:
+                raise sd.CallbackStop()
+
+            if is_paused:
+                outdata[:] = np.zeros((frames, 1))
+                return
+
+            end_pos = stream_position + frames
+            if end_pos > total_samples:
+                end_pos = total_samples
+
+            chunk = prepared_audio[stream_position:end_pos]
+
+            if len(chunk) < frames:
+                chunk = np.pad(chunk, (0, frames - len(chunk)))
+
+            outdata[:] = chunk.reshape(-1, 1)
+            stream_position = end_pos
+
+            if stream_position >= total_samples:
+                stop_playback()
+
+        audio_stream = sd.OutputStream(callback=audio_callback, samplerate=frame_rate, channels=1, dtype='float32')
+        audio_stream.start()
+
+    except:
+        return
+
+def update_progress_bar():
+    global stream_position, progress
+    if is_playing and not is_paused and iq_wave is not None:
+        progress_value = (stream_position / len(iq_wave)) * 100
+        progress["value"] = min(progress_value, 100)
+    root.after(100, update_progress_bar)  # Update 100 ms
+
+def audio_output():
+    global play_button, stop_button, progress
+    # Controles playback dans la meme frame que les graphes
+    clear_plot()
+
+    play_button = tk.Button(plot_frame, text="Play", command=toggle_playback)
+    play_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    stop_button = tk.Button(plot_frame, text="Stop", command=stop_playback)
+    stop_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    progress = ttk.Progressbar(plot_frame, orient=tk.HORIZONTAL, length=300, mode='determinate')
+    progress.pack(side=tk.LEFT, padx=5, pady=5)
+    update_progress_bar()
+
 # Fonc de changement de langue. Recharge les labels des boutons et des menus. Couvre FR et EN uniquement
 def change_lang():
     global lang
@@ -1637,6 +1744,8 @@ def load_lang_changes():
     ofdm_menu = tk.Menu(menu_bar, tearoff=0)
     freq_menu = tk.Menu(menu_bar, tearoff=0)
     demod_menu = tk.Menu(menu_bar, tearoff=0)
+    if with_sound:
+        audio_menu = tk.Menu(menu_bar, tearoff=0)
     menu_bar.add_cascade(label=lang["display"], menu=info_menu)
     menu_bar.add_cascade(label=lang["modify"], menu=mod_menu)
     menu_bar.add_cascade(label=lang["main_viz"], menu=graphs_menu)
@@ -1646,6 +1755,8 @@ def load_lang_changes():
     menu_bar.add_cascade(label=lang["cyclo_estimate"], menu=acf_menu)
     menu_bar.add_cascade(label=lang["ofdm"], menu=ofdm_menu)
     menu_bar.add_cascade(label=lang["demod"], menu=demod_menu)
+    if with_sound:
+        menu_bar.add_cascade(label="Audio", menu=audio_menu)
     # Redéfinit les labels des boutons
     load_button.config(text=lang["load"])
     close_button.config(text=lang["close"])
@@ -1729,6 +1840,9 @@ def load_lang_changes():
     demod_menu.add_command(label=lang["demod_fm"], command=demod_fm)
     demod_menu.add_command(label=lang["demod_am"], command=demod_am)
     # demod_menu.add_command(label=lang["demod_psk"], command=demod_psk)
+    # Audio
+    if with_sound:
+        audio_menu.add_command(label=lang["audio"], command=audio_output)
     # Decod
     # decod_menu.add_command(label=lang[])
 

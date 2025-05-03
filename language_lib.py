@@ -168,6 +168,7 @@ def get_fra_lib():
         "demod_am" : "Démodulation AM",
         "resample" : "Echantillonner",
         "cut_signal" : "Découper",
+        "audio" : "Lecture audio",
 
     }
     return fra_lib
@@ -340,6 +341,7 @@ def get_eng_lib():
         "demod_am" : "AM demodulation",
         "resample" : "Resample",
         "cut_signal" : "Cut",
+        "audio" : "Audio playback",
 
     }
     return eng_lib

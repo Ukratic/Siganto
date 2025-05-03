@@ -2,3 +2,4 @@ __pycache__/
 gui_exe/
 *.py[cod]
 wav_main.py
+playback.py

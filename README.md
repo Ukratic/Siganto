@@ -3,7 +3,7 @@
 A lightweight signal analysis GUI toolbox.<br>
 
 Its purpose is to read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs, measurements and modifications.
-Real-time applications are outside of the scope of this tool.<br>
+Real-time applications and dealing with incoming streams are outside the scope of this tool.<br>
 Some of the identification is automated (see some examples with screenshots below) but should always be confirmed manually.<br>
 
 SigAnTo supports mostly analysis for now, with manual fine-tuning and 2 & 4-FSK demodulation. More to come later.<br>
@@ -53,6 +53,9 @@ Overlap.
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
 #### 9. Demodulation
 - 2 & 4 FSK Demodulation
+- AM & FM Demodulation
+#### 10. Audio
+- Audio playback (when listening to an frequency modulated signal for instance, perform demodulation prior to audio playback)
 
 ### Examples :
 - Spectrogram of a Chinese 4+4 <br>
@@ -73,41 +76,34 @@ Overlap.
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_9.png" alt="FSK_demod"/>
 
 ### Changelog :
-- December 2024 : <br>
+- *SigAnto_v1.05* : <br>
 -- First upload on github<br>
--- Executable *SigAnto_v1.05* available.
 
-- January 2025 : <br>
+- *SigAnto_v1.06* : <br>
 -- Options for the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top, Rectangular.<br>
 -- Dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal in most cases.<br>
 -- Arrows for frequency fine-tuning (1Hz step). Only on Spectrogram/Constellation group for now.<br> 
+-- 2 & 4 FSK Demodulation.<br>
+-- Bug fixes on existing features.<br>
 
-- February 2025 : <br>
--- New feature : 2 & 4 FSK demodulation.<br>
--- Executable *SigAnto_v1.06* available.
-
-- In future versions : <br>
--- Decoding of some protocols
--- FM/AM demod
--- Further analysis
+- *Siganto_v1.07* : <br>
+-- AM/FM Demodulation.<br>
+-- Audio Output (optional feature adding the sounddevice library as dependency).<br>
+-- Bug fixes on existing features.<br>
 
 ### Using the app
 1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file *gui_main.py* to launch.<br>
-The GUI is in French by default at startup, but this can easily be switched to English (search for and then swap "get_fra_lib" to "get_eng_lib", or swap after launch in the display options). Debugging in the console can also be deactivated by switching the "debug" variable from True to False.<br>
 It is built on top of base python (>=3.9 with tkinter), numpy, matplotlib and scipy.<br>
 Its low list of dependencies will hopefully allow most people to run it without too much hassle in university, industry or government environments (if not, use the executable to avoid dependencies altogether).
 The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with python 3.13 and the latest stable versions of numpy, scipy and matplotlib so there should be no need to change your environment to run the code if you are using a python version equal or above 3.8.<br>
 
-2. Download and use the executable *SigAnto_v1.06_fra.exe* or *SigAnto_v1.06_eng.exe* from the releases tab.
-
-### Supported Hardware :
-None ! As previously stated, this tool has no real-time applications and can only work with .wav recordings.
+2. Download and use the executable *SigAnto_v1.07_fra.exe* or *SigAnto_v1.07_eng.exe* from the releases tab (language can still be swapped after launch).
 
 ### Supported file format :
 WAV 8-bit, 16-bit, 32-bit, 64-bit.<br>
 Scripts to convert from SigMF & MP3 are available in this repo.<br>
-SigMF conversion should work without a hitch though the metadata won't make it into the .wav file and therefore won't be shown in the GUI. 
-MP3 conversion requires ffmpeg and might also be a little more sketchy depending on how the file was recorded & encoded ; the result should be considered carefully.
+SigMF conversion should work fine (though not maintained if the format evolves) but most of the metadata will be lost.
+MP3 conversion requires ffmpeg and might also be a little sketchy depending on how the file was recorded & encoded ; the result should be considered carefully.
 
 ### Useful resources :
 - Information on signals and some example .wav files available : <br>
