@@ -35,6 +35,7 @@ def loading_libs():
     import signal_modification as sm
     import dsp_funcs as df
     import demod as dm
+
     if with_sound:
         from tkinter import ttk
         import sounddevice as sd
@@ -106,52 +107,69 @@ def find_sample_width(file_path):
         if header[:4] != b'RIFF' or header[8:12] != b'WAVE' or header[12:16] != b'fmt ': # vérifie si c'est un fichier WAV
             tk.messagebox.showerror(lang["error"], lang["invalid_wav"])
             raise ValueError(lang["invalid_wav"])
-        sample_width = struct.unpack('<H', header[34:36])[0]
-    return sample_width
+        bits_per_sample  = struct.unpack('<H', header[34:36])[0]
+        audio_format = struct.unpack('<H', header[20:22])[0]
+        if bits_per_sample not in [8, 16, 24, 32, 64]:
+            tk.messagebox.showerror(lang["error"], lang["unsupported_bits"])
+            raise ValueError(lang["unsupported_bits"])
+        if audio_format not in [1, 3]:  # PCM ou IEEE float
+            tk.messagebox.showerror(lang["error"], lang["unsupported_format"])
+            raise ValueError(lang["unsupported_format"])
+        audio_format = "PCM" if audio_format == 1 else "IEEE float"
+    return bits_per_sample , audio_format
 
 def load_wav():
-    global filepath, frame_rate, iq_wave, N, overlap
+    global filepath, frame_rate, iq_wave, N, overlap, corr
     if filepath is None:
         filepath = tk.filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if not filepath:
         return
-    
-    encodage = find_sample_width(filepath)
-    if encodage == 32:
-        n_bits = np.int32
-    elif encodage == 16:
-        n_bits = np.int16
-    elif encodage == 8:
-        n_bits = np.int8
-    elif encodage == 64:
-        n_bits = np.int64
-    else:   
-        n_bits = np.int32
-        if debug is True:
-            print("Encodage inconnu. Utilisation de l'encodage 32 bits par défaut")
 
     frame_rate, s_wave = wav.read(filepath)
-    iq_wave = np.frombuffer(s_wave, dtype=n_bits)  
-    left, right = iq_wave[0::2], iq_wave[1::2]
 
+    try:
+        if s_wave.ndim == 2 and s_wave.shape[1] == 2:
+            # Fichier stéréo → on suppose I/Q sur 2 canaux
+            left = s_wave[:, 0].astype(np.float32)
+            right = s_wave[:, 1].astype(np.float32)
+            # retire quelques échantillons pour éviter les erreurs si nécessaire
+            min_len = min(len(left), len(right))
+            iq_wave = left[:min_len] + 1j * right[:min_len]
+            # Vérification de corrélation entre les canaux gauche et droit
+            corr = np.corrcoef(left, right)[0,1]
+            if abs(corr) > 0.99:
+                if debug is True:
+                    print("Attention: canaux droite & gauche identiques. On force en mono.")
+                # Pas bien joli d'importer scipy.signal ici juste pour ça, mais c'est le plus simple 
+                import scipy.signal as sc
+                mono_signal = left
+                analytic_signal = sc.hilbert(mono_signal)
+                iq_wave = analytic_signal
+            else:
+                iq_wave = left + 1j*right
+        elif s_wave.ndim == 1:
+            # Mono → on suppose I/Q intercalé
+            left = s_wave[0::2].astype(np.float32)
+            right = s_wave[1::2].astype(np.float32)
+            min_len = min(len(left), len(right))
+            iq_wave = left[:min_len] + 1j * right[:min_len]
+        else:
+            raise ValueError("Format WAV inattendu")
+    except:
+        if debug is True:
+            print("Erreur de conversion IQ")
+        tk.messagebox.showerror(lang["error"], lang["wav_conversion"])
     if len(iq_wave) > 1e6: # si plus d'un million d'échantillons
         N = 4096
     elif len(iq_wave) < frame_rate: # si moins d'une seconde
-        N = (frame_rate//50)*(len(iq_wave)/frame_rate) # résolution de 50 Hz par défaut, plus proportionnellement à la durée si inférieur à 1 seconde
+        N = (frame_rate//25)*(len(iq_wave)/frame_rate) # résolution de 25 Hz par défaut, plus proportionnellement à la durée si inférieur à 1 seconde
         N = (int(N/2))*2 # N pair de préférence
         if N < 4: # taille minimum de 4 échantillons
             N = 4
     else:
         N = 512 # taille de fenêtre FFT par défaut
     overlap = N//overlap_value
-
-    try:
-        iq_wave = left + 1j * right  # signal IQ complexe
-    except:
-        # retire quelques échantillons pour éviter les erreurs si nécessaire
-        iq_wave = left[:min(len(left), len(right))] + 1j * right[:min(len(left), len(right))]
-        if debug is True:
-            print("Erreur de conversion IQ. Retrait de quelques échantillons pour faire correspondre I et Q")
+        
     display_file_info()
     # Plot graphes initiaux après chargement du fichier
     plot_initial_graphs()
@@ -590,13 +608,14 @@ def display_file_info():
     if filepath is None:
         info_label.config(text=lang["no_file"])
         return
-    info_label.config(text=f"{filepath}. {lang['encoding']} {find_sample_width(filepath)} bits. \
+    info_label.config(text=f"{filepath}. {lang['encoding']} {find_sample_width(filepath)[0]} bits. Format {find_sample_width(filepath)[1]}. \
                       \n{lang['samples']} {len(iq_wave)}. {lang['sampling_frq']} {frame_rate} Hz. {lang['duree']}: {len(iq_wave)/frame_rate:.2f} sec.\
                       \n {lang['fft_window']} {N}. Overlap : {overlap}. {lang['f_resol']} {frame_rate/N:.2f} Hz.")
     if debug is True:
         print("Affichage des informations du fichier")
         print("Chargé: ", filepath)
-        print("Encodage: ", find_sample_width(filepath), " bits")
+        print("Encodage: ", find_sample_width(filepath)[0], " bits")
+        print("Format: ", find_sample_width(filepath)[1])
         print("Echantillons: ", len(iq_wave))
         print("Fréquence d'échantillonnage: ", frame_rate, " Hz")
         print("Durée: ", len(iq_wave)/frame_rate, " secondes")
@@ -1486,10 +1505,12 @@ def demod_fsk():
         if param_order.get() == lang["param_order4"]:
             mapping_nat.config(state=tk.NORMAL)
             mapping_gray.config(state=tk.NORMAL)
+            mapping_custom.config(state=tk.NORMAL)
             param_mapping.set(lang["mapping_nat"])
         else:
             mapping_nat.config(state=tk.DISABLED)
             mapping_gray.config(state=tk.DISABLED)
+            mapping_custom.config(state=tk.DISABLED)
     popup = tk.Toplevel()
     popup.title(lang["demod_param"])
     popup.geometry("350x250")
@@ -1507,7 +1528,10 @@ def demod_fsk():
     mapping_nat.pack()
     mapping_gray = tk.Radiobutton(popup, text=lang["mapping_gray"], variable=param_mapping, value=lang["mapping_gray"], state=tk.DISABLED)
     mapping_gray.pack()
+    mapping_custom = tk.Radiobutton(popup, text=lang["mapping_custom"], variable=param_mapping, value=lang["mapping_custom"], state=tk.DISABLED)
+    mapping_custom.pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
+    
     popup.wait_window()
     if target_rate.get() == "":
         if debug is True:
@@ -1525,15 +1549,23 @@ def demod_fsk():
     if param_mapping.get() == lang["mapping_nat"]:
         mapping = "natural"
     elif param_mapping.get() == lang["mapping_gray"]:
-        mapping = "grey"
+        mapping = "gray"
+    elif param_mapping.get() == lang["mapping_custom"]:
+        mapping = tk.simpledialog.askstring(lang["mapping_custom"], lang["mapping_custom_desc"])
+        # actuellement un string sous forme de "0,1,2,3" ou "00,01,10,11" pour 4fsk. A transformer en liste
+        mapping = list(eval(mapping))
 
     # fonction de démod et slice bits en fonction de l'ordre
     try:
         symbols, clock = dm.wpcr(freq_diff, frame_rate, target_rate, tau, precision, debug)
         if len(symbols) > 2 and order == 2:
             bits=dm.slice_binary(symbols)
+            if debug is True:
+                print("Démodulation FSK 2 réalisée, bits: ", len(bits))
         elif len(symbols) > 2 and order == 4:
             bits = dm.slice_4fsk(symbols,mapping)
+            if debug is True :
+                print(f"Démodulation FSK {order} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}") 
         else:
             bits=0
         # plot des bits demodulés
@@ -1621,6 +1653,285 @@ def demod_am():
 #     # demod func
 #     # graphe & bits output
 #     #
+
+def demod_mfsk():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
+    freq_diff /= np.max(np.abs(freq_diff))
+    # vars pour fonctions de démod
+    target_rate = None
+    precision = 0.9
+    mapping = None
+    return_format = "binary"  # par défaut, on renvoie les bits en binaire
+    spacing = None # espacement entre les symboles. Pour l'instant pas utilisé
+    tau = np.pi
+    # on demande rapidité, ordre, espacement et mapping
+    popup = tk.Toplevel()
+    popup.title(lang["demod_param"])
+    popup.geometry("350x250")
+    param_order = tk.StringVar()
+    tk.Label(popup, text=lang["param_order"]).pack()
+    tk.Entry(popup, textvariable=param_order).pack()
+    target_rate = tk.StringVar()
+    tk.Label(popup, text=lang["demod_speed"]).pack()
+    tk.Entry(popup, textvariable=target_rate).pack()
+    param_mapping = tk.StringVar()
+    param_mapping.set(lang["mapping"])
+    mapping_nat = tk.Radiobutton(popup, text=lang["mapping_nat"], variable=param_mapping, value=lang["mapping_nat"])
+    mapping_nat.pack()
+    mapping_gray = tk.Radiobutton(popup, text=lang["mapping_gray"], variable=param_mapping, value=lang["mapping_gray"])
+    mapping_gray.pack()
+    mapping_custom = tk.Radiobutton(popup, text=lang["mapping_non-binary"], variable=param_mapping, value=lang["mapping_non-binary"])
+    mapping_custom.pack()
+    param_mapping.set(lang["mapping_nat"])
+    tk.Button(popup, text="OK", command=popup.destroy).pack()
+
+    popup.wait_window()
+    if target_rate.get() == "":
+        if debug is True:
+            print("Rapidité de démodulation non définie.")
+        return
+    elif target_rate == 0:
+        print("Pas de rapidité de démodulation définie. Essai aveugle")
+        target_rate = None
+    else:
+        target_rate = float(target_rate.get())
+    if param_mapping.get() == lang["mapping_nat"]:
+        mapping = "natural"
+    elif param_mapping.get() == lang["mapping_gray"]:
+        mapping = "gray"
+    elif param_mapping.get() == lang["mapping_non-binary"]:
+        mapping = "natural"
+        return_format = "int"
+    
+    try:
+        if debug is True:
+            print("Démodulation MFSK en cours...")
+        # symbols, clock = dm.wpcr(freq_diff, frame_rate, target_rate, tau, precision, debug)
+        symbols = dm.demodulate_mfsk(iq_wave, frame_rate,target_rate, int(param_order.get()))
+        clock = target_rate if target_rate else 0  # Si target_rate est None, on met 0 pour éviter les erreurs
+        if len(symbols) > 2:
+            bits = dm.slice_mfsk(symbols, int(param_order.get()), mapping, return_format)
+            if debug is True:
+                print(f"Démodulation MFSK réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}")
+        else:
+            bits = 0
+        # plot des bits demodulés
+        clear_plot()
+        fig = plt.figure()
+        fig.suptitle(lang["estim_bits"])
+        if not filepath:
+            print(lang["no_file"])
+            return
+        ax = plt.subplot()
+        if len(bits) > 5000:
+            bits_plot = bits[:5000]
+            fig.suptitle(f"{lang['estim_bits']} {lang['short_bits']}")
+        else:
+            bits_plot = bits
+        ax.plot(bits_plot, "o-")
+        ax.set_xlabel("Bits")
+        ax.set_ylabel(lang["bits_value"])
+    except Exception as e:
+        clear_plot()
+        fig = plt.figure()
+        fig.suptitle(lang["bits_fail"])
+        ax = plt.subplot()
+        ax.plot(0)
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    # text box pour les bits démodulés sous format txt qui pourront être copiés
+    text_box = scrolledtext.ScrolledText(plot_frame, height=6, wrap=tk.NONE)
+    text_box.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+    text_box.config(state=tk.NORMAL)
+    try:
+        text_output = f"{lang['estim_bits']} ({len(bits)}). {lang['clock_frequency']} {clock} Hz : \n"
+        # lignes de bits
+        if return_format == "int":
+            bits_per_line = 32
+            # si format int, on sépare par une virgule chaque symbole
+            bit_lines = [",".join(map(str, bits[i:i+bits_per_line])) for i in range(0, len(bits), bits_per_line)]
+            formatted_bits = "\n".join(bit_lines)
+            text_output += formatted_bits
+        else:
+            bits_per_line = 64
+            bit_lines = ["".join(map(str, bits[i:i+bits_per_line])) for i in range(0, len(bits), bits_per_line)]
+            formatted_bits = "\n".join(bit_lines)
+            text_output += formatted_bits
+    except:
+        bits, bits_plot, formatted_bits = "", "", ""
+        text_output = lang["bits_fail"]
+    text_box.insert(tk.END, text_output)
+    text_box.config(state=tk.DISABLED)
+    del canvas, time, freq_diff, bits, bits_plot, formatted_bits, text_output, text_box
+
+# Filtres supplémentaires
+def apply_median_filter():
+    global iq_wave, frame_rate
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # Demande la taille du filtre. 4 options (Léger pour 3, Modéré pour 5, Agressif pour 9, sinon personnalisé) avec liste dans la fenêtre
+    popup = tk.Toplevel()
+    popup.title(lang["median_filter"])
+    popup.geometry("300x150")
+    tk.Label(popup, text=lang["kernel_select"]).pack()
+    kernel_size = tk.StringVar()
+    options = [lang["light_filter"], lang["medium_filter"], lang["aggressive_filter"], lang["dynamic_filter"], "Custom"]
+    kernel_size.set("Custom")  # Valeur par défaut
+    kernel_size_menu = tk.OptionMenu(popup, kernel_size, *options)
+    kernel_size_menu.pack()
+    tk.Button(popup, text="OK", command=popup.destroy).pack()
+    popup.wait_window()  # Attendre que l'utilisateur ferme la fenêtre
+    if kernel_size.get() == "Custom":
+        # Si l'utilisateur a choisi "Custom", on demande la taille du noyau
+        kernel_size = tk.simpledialog.askinteger(lang["median_filter"], lang["kernel_size"], minvalue=1)
+    else:
+        # Si l'utilisateur a choisi une option, on définit la taille du noyau en fonction de l'option choisie
+        if kernel_size.get() == lang["light_filter"]:
+            kernel_size = 3
+        elif kernel_size.get() == lang["medium_filter"]:
+            kernel_size = 5
+        elif kernel_size.get() == lang["aggressive_filter"]:
+            kernel_size = 9
+        elif kernel_size.get() == lang["dynamic_filter"]:
+            symbol_rate = tk.simpledialog.askinteger(lang["median_filter"], "Bauds", minvalue=1)
+            kernel_size = int(frame_rate / (symbol_rate * 2)) | 1
+        else:
+            # Si l'utilisateur a choisi une option non reconnue, on affiche un message d'erreur
+            tk.messagebox.showerror(lang["error"], lang["kernel_invalid"])
+            if debug is True:
+                print("Taille du noyau invalide sélectionnée.")
+            return
+        if kernel_size is None:
+            return  # Annulation
+        elif kernel_size % 2 == 0:
+            # Si la taille du noyau est paire, on l'incrémente de 1 pour qu'elle soit impaire
+            kernel_size += 1
+            if debug is True:
+                print(f"La taille du noyau doit être un entier positif impair. Taille ajustée à {kernel_size}")
+        elif kernel_size < 1:
+            # afficher un message d'erreur dans l'interface
+            tk.messagebox.showerror(lang["error"], lang["kernel_error"])
+            if debug is True:
+                print("La taille du noyau doit être un entier positif impair.")
+            return
+    try:
+        iq_wave = sm.median_filter(iq_wave, kernel_size)
+        if debug is True:
+            print(f"Filtre médian de taille {kernel_size} appliqué")
+    except Exception as e:
+        print(f"Erreur lors de l'application du filtre médian: {e}")
+    plot_other_graphs()
+
+def apply_gaussian_filter():
+    global iq_wave, frame_rate
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # Demande la taille du filtre gaussien
+    sigma = tk.simpledialog.askinteger(lang["gaussian_filter"], "Sigma", minvalue=1)
+    if sigma is None:
+        return
+    try:
+        iq_wave = sm.gaussian_filter(iq_wave, sigma)
+        if debug is True:
+            print(f"Filtre gaussien de sigma {sigma} appliqué")
+    except Exception as e:
+        print(f"Erreur lors de l'application du filtre gaussien: {e}")
+    plot_other_graphs()
+
+def apply_moving_average():
+    global iq_wave, frame_rate
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # Demande la taille de la moyenne mobile
+    window_size = tk.simpledialog.askinteger(lang["moving_average"], lang["filter_window"], minvalue=1)
+    if window_size is None:
+        return
+    elif window_size < 1:
+        # Afficher un message d'erreur dans l'interface
+        tk.messagebox.showerror(lang["error"], lang["window_size_error"])
+        if debug is True:
+            print("La taille de la fenêtre doit être un entier positif.")
+        return
+    try:
+        iq_wave = sm.moving_average(iq_wave, window_size)
+        if debug is True:
+            print(f"Moyenne mobile de taille {window_size} appliquée")
+    except Exception as e:
+        print(f"Erreur lors de l'application de la moyenne mobile: {e}")
+    plot_other_graphs()
+
+def apply_fir_filter():
+    global iq_wave, frame_rate
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # Demande la fréquence de coupure et le nombre de taps
+    cutoff_freq = tk.simpledialog.askfloat(lang["fir_filter"], lang["freq_pass"], minvalue=1, maxvalue=frame_rate/2)
+    num_taps = tk.simpledialog.askinteger(lang["fir_filter"], lang["fir_taps"], minvalue=1)
+    if cutoff_freq is None or num_taps is None:
+        return
+    try:
+        iq_wave = sm.fir_filter(iq_wave, frame_rate, cutoff_freq, 'lowpass', num_taps)
+        if debug is True:
+            print(f"Filtre FIR avec fréquence de coupure {cutoff_freq} Hz et {num_taps} taps appliqué")
+    except Exception as e:
+        print(f"Erreur lors de l'application du filtre FIR: {e}")
+    plot_other_graphs()
+
+def apply_wiener_filter():
+    global iq_wave, frame_rate
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # Demande la taille du filtre Wiener et le bruit
+    # Note: le bruit est estimé par l'utilisateur, pas calculé
+    size = tk.simpledialog.askinteger(lang["wiener_filter"], lang["size"], minvalue=1)
+    noise = tk.simpledialog.askfloat(lang["wiener_filter"], lang["noise_variance"], minvalue=0.0)
+    if noise is None and size is None:
+        return # L'utilisateur a annulé. Une des 2 valeurs peut être nulle
+    try:
+        iq_wave = sm.wiener_filter(iq_wave, size, noise)
+        if debug is True:
+            print(f"Filtre Wiener de taille {size} appliqué avec variance de bruit {noise}")
+    except Exception as e:
+        print(f"Erreur lors de l'application du filtre Wiener: {e}")
+    plot_other_graphs()
+
+# Fonction pour appliquer un filtre adapté. Commentée car les motifs ne sont pas encore implémentés
+# def apply_matched_filter():
+#     global iq_wave, frame_rate
+#     if not filepath:
+#         print(lang["no_file"])
+#         return
+#     # Demande le motif du filtre adapté
+#     # partie à définir & développer
+#     if pattern is None:
+#         return  # L'utilisateur a annulé
+#     try:
+#         pattern = [float(x) for x in pattern.split(',')]
+#         iq_wave = sm.matched_filter(iq_wave, pattern)
+#         if debug is True:
+#             print(f"Filtre adapté appliqué avec motif: {pattern}")
+#     except Exception as e:
+#         print(f"Erreur lors de l'application du filtre adapté: {e}")
+#     plot_other_graphs()
+
+def shift_frequency():
+    global iq_wave, frame_rate
+    # décale la fréquence centrale de la moitié de fréquence d'échantillonnage : prend en compte les fichiers qui ne sont pas IQ mais réels
+    if not filepath:
+        return
+    iq_wave = iq_wave * ((-1) ** np.arange(len(iq_wave)))
+    if debug is True:
+        print("Décalage de fréquence Fe/2 appliqué")
+    plot_initial_graphs()
 
 def prepare_audio(sig):
     if sig.ndim > 1:
@@ -1793,6 +2104,12 @@ def load_lang_changes():
     filter_submenu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
     filter_submenu.add_command(label=lang["filter_band"], command=apply_filter_band)
     filter_submenu.add_command(label=lang["mean"], command=mean_filter)
+    filter_submenu.add_command(label=lang["median_filter"], command=apply_median_filter)
+    filter_submenu.add_command(label=lang["moving_average"], command=apply_moving_average)
+    filter_submenu.add_command(label=lang["wiener_filter"], command=apply_wiener_filter)
+    filter_submenu.add_command(label=lang["fir_filter"], command=apply_fir_filter)
+    filter_submenu.add_command(label=lang["gaussian_filter"], command=apply_gaussian_filter)
+    # filter_submenu.add_command(label="Matched filter", command=apply_matched_filter)
     mod_menu.add_cascade(label=lang["filtrer"], menu=filter_submenu)
     # Submenu FC
     move_submenu = tk.Menu(mod_menu,tearoff=0)
@@ -1804,7 +2121,6 @@ def load_lang_changes():
     sample_submenu = tk.Menu(mod_menu,tearoff=0)
     sample_submenu.add_command(label=lang["downsample"], command=downsample_signal)
     sample_submenu.add_command(label=lang["upsample"], command=upsample_signal)
-    sample_submenu.add_command(label=lang["auto_center"],command=center_signal)
     mod_menu.add_cascade(label=lang["resample"],menu=sample_submenu)
     cut_submenu = tk.Menu(mod_menu,tearoff=0)
     cut_submenu.add_command(label=lang["cut_val"], command=cut_signal)
@@ -1839,6 +2155,7 @@ def load_lang_changes():
     demod_menu.add_command(label=lang["demod_fsk"], command=demod_fsk)
     demod_menu.add_command(label=lang["demod_fm"], command=demod_fm)
     demod_menu.add_command(label=lang["demod_am"], command=demod_am)
+    demod_menu.add_command(label=lang["demod_mfsk"], command=demod_mfsk)
     # demod_menu.add_command(label=lang["demod_psk"], command=demod_psk)
     # Audio
     if with_sound:
@@ -1860,6 +2177,8 @@ load_button = tk.Button(button_frame, text=lang["load"], command=load_wav)
 load_button.pack(side=tk.LEFT)
 close_button = tk.Button(button_frame, text=lang["close"], command=close_wav)
 close_button.pack(side=tk.LEFT, padx=5)
+shift_button = tk.Button(button_frame, text=lang["shift_frq"], command=shift_frequency)
+shift_button.pack(side=tk.LEFT, padx=5)
 # Active/désactive curseurs
 mode_button = tk.Button(button_frame, text=lang["cursors_off"], command=toggle_cursor_mode)
 mode_button.pack(side=tk.RIGHT)

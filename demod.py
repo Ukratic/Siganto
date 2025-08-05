@@ -91,14 +91,14 @@ def slice_binary(symbols):
     bits = symbols >= symbols_average
     return np.array(bits, dtype=np.uint8)
 
-def slice_4fsk(symbols,mapping="natural"):
+def slice_4fsk(symbols,mapping):
     """Convertit les symboles en bits doubles (00 à 11)"""
     # chaque symbole = 2 bits
     if len(symbols) == 0:
         return np.array([], dtype=np.uint8)
-    # 4 niveaux de décision sur percentiles
-    q25, q50, q75 = np.percentile(symbols, [25, 50, 75])
-    # 2 mappings (dictionnaire éventuellement à étendre)
+    # 4 niveaux de décision sur les symboles. la fonction attend que les symboles soient déjà normalisés
+    q25, q50, q75 = -0.50, 0.00, 0.50
+    # 2 mappings, sinon custom
     mappings = {
         "natural": {
             0: (0, 0),  # Lowest freq
@@ -113,11 +113,14 @@ def slice_4fsk(symbols,mapping="natural"):
             3: (1, 0)   # Highest freq
         }
     }
+    # Vérification du mapping
+    if not isinstance(mapping, list) and mapping not in mappings :
+        raise ValueError("Mapping must be 'natural', 'gray', or a list of 4 tuples.")
     # Sélection du mapping
     if isinstance(mapping, list) and len(mapping) == 4:
         bit_map = {i: tuple(mapping[i]) for i in range(4)}
     else:
-        bit_map = mappings.get(mapping, mappings["natural"])  # Default to natural
+        bit_map = mappings.get(mapping, mappings["natural"])  # Defaut : natural
     # Assigne chaque symbole au niveau le plus proche
     bit_pairs = []
     for sym in symbols:
@@ -144,3 +147,77 @@ def am_demodulate(iq_signal):
     """Démodulation AM"""
     # Détection d'enveloppe
     return np.abs(iq_signal)
+
+def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
+    """Convertit les symboles MFSK en bits selon le mapping spécifié."""
+    symbols = np.asarray(symbols, dtype=float)
+    if len(symbols) == 0:
+        return np.array([], dtype=np.uint8 if return_format == "binary" else int)
+    if order < 2:
+        raise ValueError("Order must be ≥ 2.")
+
+    # Assigne chaque symbole au niveau le plus proche
+    levels = np.linspace(-1, 1, order)
+    indices = np.argmin(np.abs(symbols[:, None] - levels[None, :]), axis=1)
+
+    # Option pour renvoyer les indices en format entier
+    if return_format == "int":
+        return indices.astype(int)
+
+    # Mapping des indices en bits
+    num_bits = int(np.ceil(np.log2(order)))
+
+    def to_gray(n): return n ^ (n >> 1)
+    def bin_tuple(n): return tuple(int(b) for b in np.binary_repr(n, width=num_bits))
+
+    if isinstance(mapping, list):
+        if len(mapping) != order:
+            raise ValueError("Mapping list must have the same length as order.")
+        bit_map = {i: tuple(mapping[i]) for i in range(order)}
+    elif mapping == "gray":
+        bit_map = {i: bin_tuple(to_gray(i)) for i in range(order)}
+    else:  # naturel par défaut
+        bit_map = {i: bin_tuple(i) for i in range(order)}
+
+    bits = np.array([b for idx in indices for b in bit_map[idx]], dtype=np.uint8)
+    return bits
+
+def demodulate_mfsk(iq, samplerate, symbolrate, order):
+    """Demodulation MFSK. Expérimental, basé sur la détection de puissance des tons."""
+    samples_per_symbol = int(samplerate / symbolrate)
+    total_symbols = len(iq) // samples_per_symbol
+
+    if total_symbols == 0:
+        return np.array([])
+
+    iq = iq[:total_symbols * samples_per_symbol]
+    symbols_iq = iq.reshape((total_symbols, samples_per_symbol))
+
+    # Definit les fréquences des tons
+    freq_spacing = samplerate / (2 * order)
+    tone_freqs = np.linspace(-freq_spacing * (order - 1) / 2,
+                              freq_spacing * (order - 1) / 2,
+                              order)
+
+    # Prépare la fenêtre de Hanning pour lisser les symboles et la plage de temps
+    n = np.arange(samples_per_symbol)
+    window = np.hanning(samples_per_symbol)
+
+    normalized_symbols = []
+    print("Tone frequencies:", tone_freqs)
+
+    for frame in symbols_iq:
+        frame = frame * window
+        powers = []
+
+        for freq in tone_freqs:
+            osc = np.exp(-2j * np.pi * freq * n / samplerate)
+            power = np.abs(np.sum(frame * osc))**2
+            powers.append(power)
+
+        max_index = np.argmax(powers)
+        # Normalise les symboles entre -1 et 1
+        norm_value = 2 * (max_index / (order - 1)) - 1
+        normalized_symbols.append(norm_value)
+
+    return np.array(normalized_symbols)

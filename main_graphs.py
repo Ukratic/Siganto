@@ -18,7 +18,7 @@ def compute_spectrogram(iq_wave, frame_rate, N, window_func='hann'):
     elif window_func == 'blackman':
         window = np.blackman(N)
     elif window_func == 'kaiser':
-        window = np.kaiser(N, beta=14)
+        window = np.kaiser(N, beta=14) # valeurs de beta plus basses trop similaires à hamm/hann/blackman (et 0 = rect). Envisager choix de valeur 
     elif window_func == 'bartlett':
         window = np.bartlett(N)
     elif window_func == 'flattop':
