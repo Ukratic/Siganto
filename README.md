@@ -92,8 +92,8 @@ Overlap.
 
 - *V1.08* : <br>
 -- More filtering options (median, moving average, gaussian, Wiener, FIR). Some tweaking needed to make them user-friendly.<br>
--- 4-FSK demodulation now actually functional.
--- Experimental MFSK demodulation designed to handle non binary orders.<br>
+-- 4-FSK demodulation now actually functional.<br>
+-- Experimental MFSK demodulation to handle non binary orders. Not very resilient against rest conditions for now.<br>
 -- Handling of various WAV encodings made more robust (PCM & IEEE float).<br>
 
 ### Using the app

@@ -1708,8 +1708,7 @@ def demod_mfsk():
         if debug is True:
             print("Démodulation MFSK en cours...")
         # symbols, clock = dm.wpcr(freq_diff, frame_rate, target_rate, tau, precision, debug)
-        symbols = dm.demodulate_mfsk(iq_wave, frame_rate,target_rate, int(param_order.get()))
-        clock = target_rate if target_rate else 0  # Si target_rate est None, on met 0 pour éviter les erreurs
+        symbols, clock = dm.wpcr(freq_diff, frame_rate, target_rate, tau, precision, debug)
         if len(symbols) > 2:
             bits = dm.slice_mfsk(symbols, int(param_order.get()), mapping, return_format)
             if debug is True:

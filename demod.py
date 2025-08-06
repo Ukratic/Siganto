@@ -73,7 +73,7 @@ def wpcr(a, sample_rate, target_rate, tau, precision, debug):
             clock_phase -= 1
             symbols.append(a[i])
         clock_phase += cycles_per_sample
-    clock_frequency = p * sample_rate // len(f)
+    clock_frequency = p * sample_rate / len(f)
     if debug:
         print("peak frequency index: %d / %d" % (p, len(f)))
         print("detected clock frequency: %d Hz" % (p * sample_rate // len(f)))
@@ -181,43 +181,3 @@ def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
 
     bits = np.array([b for idx in indices for b in bit_map[idx]], dtype=np.uint8)
     return bits
-
-def demodulate_mfsk(iq, samplerate, symbolrate, order):
-    """Demodulation MFSK. Expérimental, basé sur la détection de puissance des tons."""
-    samples_per_symbol = int(samplerate / symbolrate)
-    total_symbols = len(iq) // samples_per_symbol
-
-    if total_symbols == 0:
-        return np.array([])
-
-    iq = iq[:total_symbols * samples_per_symbol]
-    symbols_iq = iq.reshape((total_symbols, samples_per_symbol))
-
-    # Definit les fréquences des tons
-    freq_spacing = samplerate / (2 * order)
-    tone_freqs = np.linspace(-freq_spacing * (order - 1) / 2,
-                              freq_spacing * (order - 1) / 2,
-                              order)
-
-    # Prépare la fenêtre de Hanning pour lisser les symboles et la plage de temps
-    n = np.arange(samples_per_symbol)
-    window = np.hanning(samples_per_symbol)
-
-    normalized_symbols = []
-    print("Tone frequencies:", tone_freqs)
-
-    for frame in symbols_iq:
-        frame = frame * window
-        powers = []
-
-        for freq in tone_freqs:
-            osc = np.exp(-2j * np.pi * freq * n / samplerate)
-            power = np.abs(np.sum(frame * osc))**2
-            powers.append(power)
-
-        max_index = np.argmax(powers)
-        # Normalise les symboles entre -1 et 1
-        norm_value = 2 * (max_index / (order - 1)) - 1
-        normalized_symbols.append(norm_value)
-
-    return np.array(normalized_symbols)
