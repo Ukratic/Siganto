@@ -120,15 +120,12 @@ def phase_time_angle(iq_wave, frame_rate, window_size=5):
 
 # Mesures de phase cumulée
 def phase_cumulative_distribution(iq_wave, num_bins=250):
-    """Distribution de phase"""
-    phase = np.angle(iq_wave)
-    # Histogramme de la phase cumulée avec les valeurs de phase positives
-    hist, bins = np.histogram(phase, bins=num_bins, density=True)
-    # Filtrer les valeurs de phase négatives
-    hist = hist[bins[:-1] > 0]
-    bins = bins[:-1][bins[:-1] > 0]
-
-    return hist, bins
+    """Distribution of positive wrapped phase (0 to π)"""
+    phase = np.angle(iq_wave)  # wrapped [-π, π]
+    phase_pos = phase[phase > 0]  # garder seulement les phases positives
+    hist, bin_edges = np.histogram(phase_pos, bins=num_bins, range=(0, np.pi), density=True)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    return hist, bin_centers
 
 def frequency_transitions(iq_wave, frame_rate, window_size=5):
     """Transitions de fréquence"""
@@ -148,13 +145,13 @@ def frequency_transitions(iq_wave, frame_rate, window_size=5):
 # Mesures de fréquence cumulée
 def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
     """Distribution de fréquence"""
-    phase = np.angle(iq_wave)
+    # Unwrap phase pour éviter sauts de +2pi
+    phase = np.unwrap(np.angle(iq_wave))
     inst_freq = np.diff(phase) / (2 * np.pi) * frame_rate
     # Histogramme de la fréquence instantanée cumulée
-    hist, bins = np.histogram(inst_freq, bins=num_bins, density=True)
-    bins = bins[:-1]
-
-    return hist, bins
+    hist, bin_edges = np.histogram(inst_freq, bins=num_bins, density=True)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    return hist, bin_centers
 
 ##
 # ACF

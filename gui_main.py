@@ -13,7 +13,10 @@ Many thanks to Dr Marc Lichtman - University of Maryland. Author of PySDR.
 import tkinter as tk
 from threading import Thread, Event
 
+# Activation option audio
 with_sound = True
+# Messages de debug
+debug = True
 # Initialisation : chargement des librairies et de la langue dans une fonction pour pouvoir l'intégrer dans un thread
 # Ce thread permet de charger les librairies en arrière-plan avec une fenêtre de chargement, en attendant que tout soit prêt
 loading_end = Event()
@@ -86,8 +89,6 @@ cursor_mode = False  # on/off
 click_event_id = None
 peak_indices = []
 center_method = 'defaut'
-# Messages de debug
-debug = True
 # Audio
 is_playing = False
 is_paused = False
