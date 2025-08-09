@@ -116,7 +116,7 @@ def phase_time_angle(iq_wave, frame_rate, window_size=5):
         smoothed_phase = phase
         time = np.arange(0, len(phase)) / frame_rate
 
-    return time, phase
+    return time, smoothed_phase
 
 # Mesures de phase cumulée
 def phase_cumulative_distribution(iq_wave, num_bins=250):
@@ -143,7 +143,7 @@ def frequency_transitions(iq_wave, frame_rate, window_size=5):
         smoothed_freq = inst_freq
         time = np.arange(0, len(smoothed_freq)) / frame_rate
 
-    return time, inst_freq
+    return time, smoothed_freq
 
 # Mesures de fréquence cumulée
 def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
