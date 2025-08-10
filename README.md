@@ -82,19 +82,27 @@ Overlap.
 -- Options for the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top, Rectangular.<br>
 -- Dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal in most cases.<br>
 -- Arrows for frequency fine-tuning (1Hz step). Only on Spectrogram/Constellation group for now.<br> 
--- 2 & 4 FSK Demodulation.<br>
+-- 2 & 4 FSK demodulation.<br>
 -- Bug fixes on existing features.<br>
 
 - *V1.07* : <br>
--- AM/FM Demodulation.<br>
+-- AM/FM demodulation.<br>
 -- Audio Output (optional feature adding the sounddevice library as dependency).<br>
 -- Bug fixes on existing features.<br>
 
 - *V1.08* : <br>
 -- More filtering options (median, moving average, gaussian, Wiener, FIR). Some tweaking needed to make them user-friendly.<br>
 -- 4-FSK demodulation now actually functional.<br>
--- Experimental MFSK demodulation to handle non binary orders. Not very resilient against rest conditions for now.<br>
+-- Experimental MFSK demodulation to handle multi-tone signals including non binary orders. To use with at least some transitions smoothing. Resilience against rest conditions TBD.<br>
 -- Handling of various WAV encodings made more robust (PCM & IEEE float).<br>
+-- Bug fixes on existing features (transitions smoothing & frequency distribution).<br>
+
+*Planned for V1.09* :<br>
+-- Windowing options also used on PSD, phase & frequency transitions (currently only spectrogram). <br>
+-- 2 & 4 PSK demodulation.<br>
+-- Streamlining filtering options.<br>
+-- Matched filter.<br>
+
 
 ### Using the app
 1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file *gui_main.py* to launch.<br>
@@ -105,7 +113,7 @@ The requirements.txt contains the earliest tested versions ; the .exe provided h
 2. Download and use the executable from the releases tab (language can still be swapped after launch).
 
 ### Supported file format :
-WAV 8-bit, 16-bit, 32-bit, 64-bit.<br>
+WAV 8-bit, 16-bit, 32-bit, 64-bit, encoding PCM & IEEE floats, IQ or real.<br>
 Scripts to convert from SigMF & MP3 are available in this repo.<br>
 SigMF conversion should work fine (though not maintained if the format evolves) but most of the metadata will be lost.
 MP3 conversion requires ffmpeg and might also be a little sketchy depending on how the file was recorded & encoded ; the result should be considered carefully.
