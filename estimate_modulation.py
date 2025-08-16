@@ -5,6 +5,7 @@ Fonctions d'estimation des paramètres de modulation d'un signal IQ :
 """
 
 import numpy as np
+import dsp_funcs as df
 ##
 # Fonctions mesures de la rapidité de modulation
 ##
@@ -74,6 +75,50 @@ def power_series(iq_wave, frame_rate):
 
     return f, squared_metric, quartic_metric, peak_squared_freq, peak_quartic_freq
 
+# Cyclospectre
+def cyclic_spectrum_fft(iq_wave, frame_rate, alpha_list):
+    """Cyclospectre FFT"""
+    N = len(iq_wave)
+    y = np.abs(iq_wave)**2  # |x[n]|^2
+    Y = np.fft.fftshift(np.fft.fft(y, n=N))
+    freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1/frame_rate)) # axe des fréquences
+    # Interpolation de FFT puissance pour la liste de fréquences alpha
+    magnitude = np.abs(Y)
+    cyclic_corr = np.interp(alpha_list, freqs, magnitude)
+    return cyclic_corr
+
+def cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window, frame_len=512, step=256):
+    """Cyclospectre avec FFT glissante"""
+    window = df.get_window(window, frame_len)
+    alpha_list = np.linspace(-frame_rate/2, frame_rate/2, 1000)  # fréquences cycliques
+    # Initialisation de l'accumulateur de corrélation cyclique
+    cyclic_corr_accum = np.zeros(len(alpha_list))
+    frame_count = 0
+
+    for start in range(0, len(iq_wave) - frame_len + 1, step):
+        frame = iq_wave[start:start + frame_len]
+        frame_win = frame * window
+        cyclic_corr = cyclic_spectrum_fft(frame_win, frame_rate, alpha_list)
+        cyclic_corr_accum += cyclic_corr
+        frame_count += 1
+
+    cyclic_corr_avg = cyclic_corr_accum / frame_count
+
+    # On retire les pics de puissance autour de 0 Hz pour déterminer la rapidité de modulation
+    discard_dc = np.abs(cyclic_corr_avg)
+    zero_index = np.abs(alpha_list).argmin()
+    discard_dc[zero_index-10:zero_index+10] = 0
+    peak_freq_index = np.argmax(discard_dc)
+    peak_freq = alpha_list[peak_freq_index]
+    # pas de pic de fréquence si ce n'est pas clairement au-dessus du bruit
+    if np.max(discard_dc) < 2*np.mean(discard_dc):
+        peak_freq = 0
+
+    return alpha_list, cyclic_corr_avg, peak_freq
+
+# call :
+# cyclic_corr_avg = cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window, frame_len=N, step=overlap)
+
 ##
 # Fonctions de mesures temporelles
 ##
@@ -104,17 +149,18 @@ def persistance_spectrum(iq_wave, frame_rate, N, power_bins=50):
     return f, min_power, max_power, persistence
 
 # Visualiser la phase dans le domaine temporel
-def phase_time_angle(iq_wave, frame_rate, window_size=5):
+def phase_time_angle(iq_wave, frame_rate, window_size=5, window_type='rectangular'):
     """Transitions de phase"""
     phase = np.angle(iq_wave)
     # Lissage de la phase
     if window_size > 1:
-        window = np.ones(window_size) / window_size
+        window = df.get_window(window_type,window_size)
+        window /= np.sum(window)
         smoothed_phase = np.convolve(phase, window, mode='same')
-        time = np.arange(0, len(smoothed_phase)) / frame_rate
     else:
         smoothed_phase = phase
-        time = np.arange(0, len(phase)) / frame_rate
+
+    time = np.arange(0, len(phase)) / frame_rate
 
     return time, smoothed_phase
 
@@ -125,20 +171,22 @@ def phase_cumulative_distribution(iq_wave, num_bins=250):
     phase_pos = phase[phase > 0]  # garder seulement les phases positives
     hist, bin_edges = np.histogram(phase_pos, bins=num_bins, range=(0, np.pi), density=True)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
     return hist, bin_centers
 
-def frequency_transitions(iq_wave, frame_rate, window_size=5):
+def frequency_transitions(iq_wave, frame_rate, window_size=5, window_type='rectangular'):
     """Transitions de fréquence"""
     phase = np.unwrap(np.angle(iq_wave))
     # Freq instantanee derivee de la phase
     inst_freq = np.diff(phase) / (2 * np.pi) * frame_rate
     if window_size > 1:
-        window = np.ones(window_size) / window_size
+        window = df.get_window(window_type,window_size)
+        window /= np.sum(window)
         smoothed_freq = np.convolve(inst_freq, window, mode='same')
-        time = np.arange(0, len(smoothed_freq)) / frame_rate
     else:
         smoothed_freq = inst_freq
-        time = np.arange(0, len(smoothed_freq)) / frame_rate
+
+    time = np.arange(0, len(smoothed_freq)) / frame_rate
 
     return time, smoothed_freq
 
@@ -151,6 +199,7 @@ def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
     # Histogramme de la fréquence instantanée cumulée
     hist, bin_edges = np.histogram(inst_freq, bins=num_bins, density=True)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
     return hist, bin_centers
 
 ##
@@ -257,22 +306,3 @@ def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
     N = N - 1
 
     return Tu, Tg, Ts, Df, N
-
-# Fonc pour centrer signal entre 2 pics de spectre signal^n
-def center_signal(iq_wave,frame_rate):
-    """Fonction de recentrage FC avec les pics de signal puissance 2"""
-    f, squared, _, _, _ = power_series(iq_wave, frame_rate)
-    # cherches index 2 pics proeminents (neg & pos)
-    peak_indices = np.argsort(squared)[-2:]
-    peak_freqs = np.sort(f[peak_indices])
-    if len(peak_freqs) < 2:
-        print("Moins de 2 pics trouvés pour recentrer le signal.")
-        return iq_wave,0
-
-    peak_neg, peak_pos = peak_freqs
-    # Div par 4 : signal**2
-    center_freq = (peak_pos + peak_neg) / 4
-    # applique shift
-    iq_wave = iq_wave * np.exp(-1j * 2 * np.pi * center_freq * np.arange(len(iq_wave)) / frame_rate)
-
-    return iq_wave, center_freq

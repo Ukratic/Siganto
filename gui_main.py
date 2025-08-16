@@ -17,6 +17,11 @@ from threading import Thread, Event
 with_sound = True
 # Messages de debug
 debug = True
+# Drag & drop
+drag_drop = True
+if drag_drop is True:
+    from tkinterdnd2 import TkinterDnD, DND_FILES
+
 # Initialisation : chargement des librairies et de la langue dans une fonction pour pouvoir l'intégrer dans un thread
 # Ce thread permet de charger les librairies en arrière-plan avec une fenêtre de chargement, en attendant que tout soit prêt
 loading_end = Event()
@@ -50,7 +55,10 @@ def loading_libs():
 # Fenêtre de chargement
 t = Thread(target=loading_libs, daemon=True)
 t.start()
-root = tk.Tk()
+if drag_drop is True:
+    root = TkinterDnD.Tk()
+else:
+    root = tk.Tk()
 root.withdraw()
 loading_screen = tk.Toplevel(root)
 loading_screen.title("SigAnTo")
@@ -88,7 +96,6 @@ distance_text = None # distance entre les curseurs
 cursor_mode = False  # on/off
 click_event_id = None
 peak_indices = []
-center_method = 'defaut'
 # Audio
 is_playing = False
 is_paused = False
@@ -175,6 +182,13 @@ def load_wav():
     # Plot graphes initiaux après chargement du fichier
     plot_initial_graphs()
 
+def on_file_drop(event):
+    global filepath
+    files = root.tk.splitlist(event.data)  # handles spaces in file names
+    if files:
+        filepath = files[0]  # take first dropped file
+        load_wav()    
+
 # fonc de nettoyage graphe
 def clear_plot():
     try:
@@ -235,17 +249,10 @@ def plot_initial_graphs():
     ax[0].set_title(f"{lang['window']} {window_choice}")
 
     # DSP
-    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N)
-    line, = ax[1].plot(f, Pxx)
-    # Suppression du segment le plus long qui affiche une ligne inutile
-    # Cherche le plus long segment
-    distances = np.sqrt(np.diff(f)**2 + np.diff(Pxx)**2)
-    longest_segment_index = np.argmax(distances)
-    # Coordonnées du segment le plus long
-    x1, y1 = f[longest_segment_index], Pxx[longest_segment_index]
-    x2, y2 = f[longest_segment_index + 1], Pxx[longest_segment_index + 1]
-    # Retire le segment le plus long du graphe en le remplaçant par une ligne blanche
-    ax[1].plot([x1, x2], [y1, y2], color="white", linewidth=3) # width = 3 pour être sûr de bien couvrir le segment même si la ligne est inclinée
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N, overlap, window_choice)
+    Pxx_shifted = np.fft.fftshift(Pxx) 
+    f_shifted = np.fft.fftshift(f)
+    ax[1].plot(f_shifted, Pxx_shifted)
     ax[1].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[1].set_ylabel("Amplitude")
     ax[1].axvline(x=fmax, color='r', linestyle='--')
@@ -261,7 +268,7 @@ def plot_initial_graphs():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     # del var pour libérer la mémoire
-    del stft_matrix, canvas, spec, a0, a1, freqs, times, fmin, fmax, f, Pxx, line, distances, longest_segment_index, x1, y1, x2, y2
+    del stft_matrix, canvas, spec, a0, a1, freqs, times, fmin, fmax, f, Pxx
 
 # Fonc pour changer la taille de fenêtre FFT
 def define_N():
@@ -274,7 +281,7 @@ def define_N():
     N = (int(N/2))*2 # N doit être pair
     overlap = N//overlap_value
     print(lang["fft_window"], N)
-    stft_solo()
+    plot_initial_graphs()
     display_file_info()
 
 # # Autres groupe de graphes de base et flèches pour ajuster la fréquence centrale
@@ -371,7 +378,7 @@ def set_window():
     #dropdown pour choisir la fenêtre
     popup = tk.Toplevel()
     popup.title(lang["window_choice"])
-    popup.geometry("300x200")
+    popup.geometry("300x300")
     window_list = tk.StringVar()
     window_list.set(window_choice)
     tk.Radiobutton(popup, text="Hann", variable=window_list, value="hann").pack()
@@ -380,18 +387,20 @@ def set_window():
     tk.Radiobutton(popup, text="Blackman", variable=window_list, value="blackman").pack()
     tk.Radiobutton(popup, text="Bartlett", variable=window_list, value="bartlett").pack()
     tk.Radiobutton(popup, text="Flat Top", variable=window_list, value="flattop").pack()
-    tk.Radiobutton(popup, text="Rectangular", variable=window_list, value="rect").pack()
+    tk.Radiobutton(popup, text="Blackman-Harris 7-term", variable=window_list, value="blackmanharris7term").pack()
+    tk.Radiobutton(popup, text="Rectangular", variable=window_list, value="rectangular").pack()
+    tk.Radiobutton(popup, text="Gaussian", variable=window_list, value="gaussian").pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.wait_window()
     window_choice = window_list.get()
 
     if window_choice is None or window_choice == "":
-        window_choice = "hann"
+        window_choice = "rectangular" # Valeur par défaut
         if debug is True:
             print("Pas de fenêtre définie pour la STFT")
         return
     print("Fenêtre définie pour la STFT: ", window_choice)
-    stft_solo()
+    plot_initial_graphs()
 
 # Fonc du spectrogramme 3D
 def plot_3d_spectrogram():
@@ -526,7 +535,7 @@ def set_overlap():
     if debug is True:
         print("Recouvrement défini à ", overlap)
     display_file_info()
-    stft_solo()
+    plot_initial_graphs()
 
 def stft_solo():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
@@ -576,6 +585,9 @@ def display_frq_info():
     estim_speed = round(np.abs(em.power_spectrum_fft(iq_wave, frame_rate)[2]),2)
     _,_,_, peak_squared_freq, peak_quartic_freq = em.power_series(iq_wave, frame_rate)
     estim_speed_3 = [round(abs(peak_squared_freq),2),round(abs(peak_quartic_freq),2)]
+    _, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
+    freq_diff /= np.max(np.abs(freq_diff))
+    estim_speed_4 = round(float(dm.estimate_baud_rate(freq_diff, frame_rate)),2)
     acf_peak = round(np.abs(em.autocorrelation_peak(iq_wave, frame_rate, min_distance=25)[1]),2)
 
     popup = tk.Toplevel()
@@ -587,7 +599,8 @@ def display_frq_info():
     tk.Label(popup, text=f"{lang['estim_bw']} {round(bw,2)} Hz").pack()
     tk.Label(popup, text=f"{lang['estim_speed']} {estim_speed} Bds\n \
                     {lang['estim_speed_2']} {estim_speed_2} Bds\n \
-                    {lang['estim_speed_3']} {estim_speed_3[0]*2} / {estim_speed_3[1]*2} Bds").pack()
+                    {lang['estim_speed_3']} {estim_speed_3[0]*2} / {estim_speed_3[1]*2} Bds\n \
+                    {lang['estim_speed_4']} {estim_speed_4} Bds").pack()
     tk.Label(popup, text=f"{lang['acf_peak_txt']} {acf_peak} ms" ).pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
 
@@ -825,11 +838,8 @@ def center_signal():
     if not filepath:
         print(lang["no_file"])
         return
-    # methode en fonction du nb echantillons pour éviter ralentissements
-    if len(iq_wave) < 1e6:
-        iq_wave, center = df.center_signal(iq_wave, frame_rate, proeminence=0.1)
-    elif len(iq_wave) >= 1e6 or center_method != 'defaut':
-        iq_wave, center = em.center_signal(iq_wave, frame_rate)
+    # param de proeminence à ajuster
+    iq_wave, center = df.center_signal(iq_wave, frame_rate, prominence=0.1)
     if debug is True:
         print(f"Signal centré par déplacement de {round(center, 2)} Hz.")
 
@@ -934,6 +944,38 @@ def pseries():
     canvas.draw()
     del f, squared, quartic, canvas
 
+def cyclospectrum():
+    # Cyclospectre
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["cyclospectrum"])
+    print(lang["cyclospectrum"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    f, cyclic_corr_avg, peak_freq = em.cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window=window_choice, frame_len=N, step=overlap)
+    f = np.linspace(frame_rate/-2, frame_rate/2, len(cyclic_corr_avg))
+    ax = plt.subplot()
+    ax.plot(f,cyclic_corr_avg)
+    # on retire les pics de puissance autour de 0 Hz pour déterminer la rapidité de modulation
+    if abs(peak_freq) > 25:
+        # on affiche les pics de puissance à -peak_freq et peak_freq
+        ax.axvline(x=-peak_freq, color='r', linestyle='--')
+        ax.axvline(x=peak_freq, color='r', linestyle='--')
+        ax.set_title(f"{lang['estim_peak']} {round(peak_freq,2)} Hz")
+    else:
+        ax.set_title(lang['estim_failed'])
+    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
+    ax.set_ylabel(lang["mag"])
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del cyclic_corr_avg, f, peak_freq, canvas
+
 def dsp():
     # affichage de la densité spectrale de puissance et de la bande passante estimée
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, bw
@@ -943,7 +985,7 @@ def dsp():
     fig = plt.figure()
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
-    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N)
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N,overlap,window_choice)
     line, = ax.plot(f, Pxx)
     # Suppression du segment le plus long qui affiche une ligne inutile
     # Cherche le plus long segment
@@ -1250,7 +1292,7 @@ def ofdm_results():
         return
     alpha_0 = float(alpha_0)
     dsp()
-    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N)
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N,overlap,window_choice)
     # affiche BW estimée et demande de valider ou de redéfinir la bande passante
     popup = tk.Toplevel()
     popup.title(lang["bandwidth"])
@@ -1538,7 +1580,7 @@ def demod_fsk():
         if debug is True:
             print("Rapidité de démodulation non définie.")
         return
-    elif target_rate == 0:
+    elif float(target_rate.get()) < 1:
         print("Pas de rapidité de démodulation définie. Essai aveugle")
         target_rate = None
     else:
@@ -1597,15 +1639,13 @@ def demod_fsk():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     # text box pour les bits démodulés sous format txt qui pourront être copiés
-    text_box = scrolledtext.ScrolledText(plot_frame,height=6, wrap=tk.NONE)
+    text_box = scrolledtext.ScrolledText(plot_frame,height=6, wrap="char")
     text_box.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
     text_box.config(state=tk.NORMAL)  # Temporarily enable text box
     try:
         text_output= f"{lang['estim_bits']} ({len(bits)}). {lang['clock_frequency']} {clock} Hz : \n"
         # lignes de bits
-        bits_per_line = 64  # formattage à ajuster
-        bit_lines = ["".join(map(str, bits[i:i+bits_per_line])) for i in range(0, len(bits), bits_per_line)]
-        formatted_bits = "\n".join(bit_lines)
+        formatted_bits = "".join(map(str, bits))
         text_output += formatted_bits
     except:
         bits,bits_plot,formatted_bits = "","",""
@@ -1655,6 +1695,7 @@ def demod_am():
 #     # graphe & bits output
 #     #
 
+# EXPERIMENTAL
 def demod_mfsk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
@@ -1666,10 +1707,15 @@ def demod_mfsk():
     return_format = "binary"  # par défaut, on renvoie les bits en binaire
     spacing = None # espacement entre les symboles. Pour l'instant pas utilisé
     tau = np.pi
-    # on demande rapidité, ordre, espacement et mapping
+    # on demande rapidité, ordre, espacement et mapping    
     popup = tk.Toplevel()
     popup.title(lang["demod_param"])
-    popup.geometry("350x250")
+    # popup.geometry("350x250")
+    param_method = tk.StringVar()
+    param_method.set("Méthode")
+    tk.Radiobutton(popup, text="Basée sur les différences discrètes dans le temps (pré-filtrage nécessaire)", variable=param_method, value="main").pack()
+    tk.Radiobutton(popup, text="Basée sur la détection des pics dans la STFT (Goertzel - Viterbi)", variable=param_method, value="alt").pack()
+    param_method.set("main")
     param_order = tk.StringVar()
     tk.Label(popup, text=lang["param_order"]).pack()
     tk.Entry(popup, textvariable=param_order).pack()
@@ -1692,24 +1738,30 @@ def demod_mfsk():
         if debug is True:
             print("Rapidité de démodulation non définie.")
         return
-    elif target_rate == 0:
+    elif float(target_rate.get()) < 1:
         print("Pas de rapidité de démodulation définie. Essai aveugle")
         target_rate = None
+        clock = dm.estimate_baud_rate(freq_diff, frame_rate, target_rate, precision, debug)
     else:
-        target_rate = float(target_rate.get())
+        clock = float(target_rate.get())
     if param_mapping.get() == lang["mapping_nat"]:
         mapping = "natural"
     elif param_mapping.get() == lang["mapping_gray"]:
         mapping = "gray"
     elif param_mapping.get() == lang["mapping_non-binary"]:
-        mapping = "natural"
+        mapping = "non-binary"
         return_format = "int"
-    
+
     try:
         if debug is True:
             print("Démodulation MFSK en cours...")
-        # symbols, clock = dm.wpcr(freq_diff, frame_rate, target_rate, tau, precision, debug)
-        symbols, clock = dm.wpcr(freq_diff, frame_rate, target_rate, tau, precision, debug)
+        if param_method.get() == "main":
+            symbols, clock = dm.wpcr(freq_diff, frame_rate, clock, tau, precision, debug)
+        elif param_method.get() == "alt":
+        # EXPERIMENTAL
+            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_wave, frame_rate, clock, num_tones=int(param_order.get()), peak_thresh_db=8, switch_penalty=0.05)       
+            tone_freq /= np.max(np.abs(tone_freq))
+            symbols, _ = dm.wpcr(tone_freq, frame_rate, target_rate=None, tau=tau, precision=precision, debug=debug)
         if len(symbols) > 2:
             bits = dm.slice_mfsk(symbols, int(param_order.get()), mapping, return_format)
             if debug is True:
@@ -1744,22 +1796,18 @@ def demod_mfsk():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     # text box pour les bits démodulés sous format txt qui pourront être copiés
-    text_box = scrolledtext.ScrolledText(plot_frame, height=6, wrap=tk.NONE)
+    text_box = scrolledtext.ScrolledText(plot_frame, height=6, wrap="char")
     text_box.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
     text_box.config(state=tk.NORMAL)
     try:
         text_output = f"{lang['estim_bits']} ({len(bits)}). {lang['clock_frequency']} {clock} Hz : \n"
         # lignes de bits
         if return_format == "int":
-            bits_per_line = 32
             # si format int, on sépare par une virgule chaque symbole
-            bit_lines = [",".join(map(str, bits[i:i+bits_per_line])) for i in range(0, len(bits), bits_per_line)]
-            formatted_bits = "\n".join(bit_lines)
+            formatted_bits = ",".join(map(str, bits))
             text_output += formatted_bits
         else:
-            bits_per_line = 64
-            bit_lines = ["".join(map(str, bits[i:i+bits_per_line])) for i in range(0, len(bits), bits_per_line)]
-            formatted_bits = "\n".join(bit_lines)
+            formatted_bits = "".join(map(str, bits))
             text_output += formatted_bits
     except:
         bits, bits_plot, formatted_bits = "", "", ""
@@ -1825,47 +1873,61 @@ def apply_median_filter():
             print(f"Filtre médian de taille {kernel_size} appliqué")
     except Exception as e:
         print(f"Erreur lors de l'application du filtre médian: {e}")
-    plot_other_graphs()
-
-def apply_gaussian_filter():
-    global iq_wave, frame_rate
-    if not filepath:
-        print(lang["no_file"])
-        return
-    # Demande la taille du filtre gaussien
-    sigma = tk.simpledialog.askinteger(lang["gaussian_filter"], "Sigma", minvalue=1)
-    if sigma is None:
-        return
-    try:
-        iq_wave = sm.gaussian_filter(iq_wave, sigma)
-        if debug is True:
-            print(f"Filtre gaussien de sigma {sigma} appliqué")
-    except Exception as e:
-        print(f"Erreur lors de l'application du filtre gaussien: {e}")
-    plot_other_graphs()
+    plot_initial_graphs()
 
 def apply_moving_average():
     global iq_wave, frame_rate
     if not filepath:
         print(lang["no_file"])
         return
-    # Demande la taille de la moyenne mobile
-    window_size = tk.simpledialog.askinteger(lang["moving_average"], lang["filter_window"], minvalue=1)
-    if window_size is None:
-        return
-    elif window_size < 1:
-        # Afficher un message d'erreur dans l'interface
-        tk.messagebox.showerror(lang["error"], lang["window_size_error"])
-        if debug is True:
-            print("La taille de la fenêtre doit être un entier positif.")
-        return
+    
+    # Demande la taille du filtre. 4 options (Léger pour 3, Modéré pour 5, Agressif pour 9, sinon personnalisé) avec liste dans la fenêtre
+    popup = tk.Toplevel()
+    popup.title(lang["moving_average"])
+    popup.geometry("300x150")
+    tk.Label(popup, text=lang["window_size_select"]).pack()
+    window_size = tk.StringVar()
+    options = [lang["light_filter"], lang["medium_filter"], lang["aggressive_filter"], lang["dynamic_filter"], "Custom"]
+    window_size.set("Custom")  # Valeur par défaut
+    window_size_menu = tk.OptionMenu(popup, window_size, *options)
+    window_size_menu.pack()
+    tk.Button(popup, text="OK", command=popup.destroy).pack()
+    popup.wait_window()  # Attendre que l'utilisateur ferme la fenêtre
+    if window_size.get() == "Custom":
+        # Si l'utilisateur a choisi "Custom", on demande la taille de fenêtre
+        window_size = tk.simpledialog.askinteger(lang["moving_average"], lang["filter_window"], minvalue=1)
+    else:
+        # Si l'utilisateur a choisi une option, on définit la taille de fenêtre en fonction de l'option choisie
+        if window_size.get() == lang["light_filter"]:
+            window_size = 5
+        elif window_size.get() == lang["medium_filter"]:
+            window_size = 11
+        elif window_size.get() == lang["aggressive_filter"]:
+            window_size = 21
+        elif window_size.get() == lang["dynamic_filter"]:
+            symbol_rate = tk.simpledialog.askinteger(lang["moving_average"], "Bauds", minvalue=1)
+            window_size = int(frame_rate / (symbol_rate)) | 1
+        else:
+            # Si l'utilisateur a choisi une option non reconnue, on affiche un message d'erreur
+            tk.messagebox.showerror(lang["error"], lang["window_invalid"])
+            if debug is True:
+                print("Taille de fenêtre invalide sélectionnée.")
+            return
+        if window_size is None:
+            return  # Annulation
+        elif window_size < 1:
+            # afficher un message d'erreur dans l'interface
+            tk.messagebox.showerror(lang["error"], lang["window_size_error"])
+            if debug is True:
+                print("La taille de la fenêtre doit être un entier positif.")
+            return
     try:
         iq_wave = sm.moving_average(iq_wave, window_size)
         if debug is True:
             print(f"Moyenne mobile de taille {window_size} appliquée")
     except Exception as e:
         print(f"Erreur lors de l'application de la moyenne mobile: {e}")
-    plot_other_graphs()
+    plot_initial_graphs()
 
 def apply_fir_filter():
     global iq_wave, frame_rate
@@ -1883,7 +1945,7 @@ def apply_fir_filter():
             print(f"Filtre FIR avec fréquence de coupure {cutoff_freq} Hz et {num_taps} taps appliqué")
     except Exception as e:
         print(f"Erreur lors de l'application du filtre FIR: {e}")
-    plot_other_graphs()
+    plot_initial_graphs()
 
 def apply_wiener_filter():
     global iq_wave, frame_rate
@@ -1902,26 +1964,50 @@ def apply_wiener_filter():
             print(f"Filtre Wiener de taille {size} appliqué avec variance de bruit {noise}")
     except Exception as e:
         print(f"Erreur lors de l'application du filtre Wiener: {e}")
-    plot_other_graphs()
+    plot_initial_graphs()
 
-# Fonction pour appliquer un filtre adapté. Commentée car les motifs ne sont pas encore implémentés
-# def apply_matched_filter():
-#     global iq_wave, frame_rate
-#     if not filepath:
-#         print(lang["no_file"])
-#         return
-#     # Demande le motif du filtre adapté
-#     # partie à définir & développer
-#     if pattern is None:
-#         return  # L'utilisateur a annulé
-#     try:
-#         pattern = [float(x) for x in pattern.split(',')]
-#         iq_wave = sm.matched_filter(iq_wave, pattern)
-#         if debug is True:
-#             print(f"Filtre adapté appliqué avec motif: {pattern}")
-#     except Exception as e:
-#         print(f"Erreur lors de l'application du filtre adapté: {e}")
-#     plot_other_graphs()
+# Fonction pour appliquer un filtre adapté
+def apply_matched_filter():
+    global iq_wave, frame_rate
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # Popup pour sélectionner le filtre
+    popup = tk.Toplevel()
+    popup.title(lang["matched_filter"])
+    popup.geometry("300x150")
+    tk.Label(popup, text=lang["pulse_shape"]).pack()
+    pulse_shape_var = tk.StringVar()
+    options = ['rectangular', 'gaussian', 'raised_cosine', 'root_raised_cosine', 'sinc', 'rsinc']
+    pulse_shape_var.set('root_raised_cosine')  # default
+    pulse_shape_menu = tk.OptionMenu(popup, pulse_shape_var, *options)
+    pulse_shape_menu.pack()
+    tk.Button(popup, text="OK", command=popup.destroy).pack()
+    popup.wait_window()
+    pulse_shape = pulse_shape_var.get()
+    # Demande la rapidité de modulation
+    symbol_rate = tk.simpledialog.askfloat(lang["matched_filter"], lang["symbol_rate"], minvalue=0.1)
+    if symbol_rate is None:
+        return  # Annulation
+    # Demande du facteur (optionnel)
+    if pulse_shape in ('raised_cosine', 'root_raised_cosine', 'gaussian'):
+        factor = tk.simpledialog.askfloat(lang["matched_filter"], lang["filter_factor"], minvalue=0.0, maxvalue=1.0)
+        if factor is None:
+            return  # Annulation
+    else:
+        factor = None
+
+    try:
+        iq_wave = sm.matched_filter(iq_wave, frame_rate, symbol_rate, factor=factor, pulse_shape=pulse_shape)
+        if debug:
+            print(f"Filtre adapté appliqué: {pulse_shape}, facteur={factor}, rapidité={symbol_rate}")
+    except Exception as e:
+        tk.messagebox.showerror(lang["error"], f"{lang["error_matched_filter"]}: {e}")
+        if debug:
+            print(f"Erreur lors de l'application du filtre adapté : {e}")
+    
+    plot_initial_graphs()
+
 
 def shift_frequency():
     global iq_wave, frame_rate
@@ -2049,6 +2135,7 @@ def load_lang_changes():
     graphs_menu = tk.Menu(menu_bar, tearoff=0)
     info_menu = tk.Menu(menu_bar, tearoff=0)
     mod_menu = tk.Menu(menu_bar, tearoff=0)
+    filter_menu = tk.Menu(menu_bar, tearoff=0)
     power_menu = tk.Menu(menu_bar, tearoff=0)
     diff_menu = tk.Menu(menu_bar, tearoff=0)
     acf_menu = tk.Menu(menu_bar, tearoff=0)
@@ -2059,6 +2146,7 @@ def load_lang_changes():
         audio_menu = tk.Menu(menu_bar, tearoff=0)
     menu_bar.add_cascade(label=lang["display"], menu=info_menu)
     menu_bar.add_cascade(label=lang["modify"], menu=mod_menu)
+    menu_bar.add_cascade(label=lang["filtrer"], menu=filter_menu)
     menu_bar.add_cascade(label=lang["main_viz"], menu=graphs_menu)
     menu_bar.add_cascade(label=lang["power_estimate"], menu=power_menu)
     menu_bar.add_cascade(label=lang["freq_estimate"], menu=freq_menu)
@@ -2085,54 +2173,54 @@ def load_lang_changes():
     info_menu.add_command(label=lang["frq_info"], command=display_frq_info)
     # Submenu params graphes
     param_submenu = tk.Menu(info_menu,tearoff=0)
-    param_submenu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
     param_submenu.add_command(label=lang["param_spectre_persistance"], command=param_spectre_persistance)
     param_submenu.add_command(label=lang["param_hist_bins"],command=set_hist_bins)
     info_menu.add_cascade(label=lang["params"], menu=param_submenu)
-    # Submenu FFT
-    fft_submenu = tk.Menu(info_menu,tearoff=0)
-    fft_submenu.add_command(label=lang["fft_size"], command=define_N)
-    fft_submenu.add_command(label=lang["set_window"], command=set_window)
-    fft_submenu.add_command(label=lang["set_overlap"], command=set_overlap)
-    info_menu.add_cascade(label=lang["fft_options"], menu=fft_submenu)
     # Changer langue. Label "English" si langue = fr, "Français" si langue = en
     lang_switch = "Switch language: English" if lang['lang'] == "Français" else "Changer langue: Français"
     info_menu.add_command(label=lang_switch, command=change_lang)
     # Modifications du signal
-    # Submenu Filtre
-    filter_submenu = tk.Menu(mod_menu,tearoff=0)
-    filter_submenu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
-    filter_submenu.add_command(label=lang["filter_band"], command=apply_filter_band)
-    filter_submenu.add_command(label=lang["mean"], command=mean_filter)
-    filter_submenu.add_command(label=lang["median_filter"], command=apply_median_filter)
-    filter_submenu.add_command(label=lang["moving_average"], command=apply_moving_average)
-    filter_submenu.add_command(label=lang["wiener_filter"], command=apply_wiener_filter)
-    filter_submenu.add_command(label=lang["fir_filter"], command=apply_fir_filter)
-    filter_submenu.add_command(label=lang["gaussian_filter"], command=apply_gaussian_filter)
-    # filter_submenu.add_command(label="Matched filter", command=apply_matched_filter)
-    mod_menu.add_cascade(label=lang["filtrer"], menu=filter_submenu)
     # Submenu FC
     move_submenu = tk.Menu(mod_menu,tearoff=0)
     move_submenu.add_command(label=lang["move_frq"], command=move_frequency)
     move_submenu.add_command(label=lang["move_freq_cursors"], command=move_frequency_cursors)
     move_submenu.add_command(label=lang["auto_center"],command=center_signal)
     mod_menu.add_cascade(label=lang["center_frq"],menu=move_submenu)
-    # sampling & cutting
+    # Echantillonnage
     sample_submenu = tk.Menu(mod_menu,tearoff=0)
     sample_submenu.add_command(label=lang["downsample"], command=downsample_signal)
     sample_submenu.add_command(label=lang["upsample"], command=upsample_signal)
     mod_menu.add_cascade(label=lang["resample"],menu=sample_submenu)
+    # Découpage : réduire durée
     cut_submenu = tk.Menu(mod_menu,tearoff=0)
     cut_submenu.add_command(label=lang["cut_val"], command=cut_signal)
     cut_submenu.add_command(label=lang["cut_cursors"], command=cut_signal_cursors)
     mod_menu.add_cascade(label=lang["cut_signal"],menu=cut_submenu)
-    # save new wav
+    # Submenu fenêtrage
+    window_submenu = tk.Menu(mod_menu,tearoff=0)
+    window_submenu.add_command(label=lang["fft_size"], command=define_N)
+    window_submenu.add_command(label=lang["set_window"], command=set_window)
+    window_submenu.add_command(label=lang["set_overlap"], command=set_overlap)
+    mod_menu.add_cascade(label=lang["window_options"], menu=window_submenu)
+    # Lissage
+    mod_menu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
+    # Enregistrer nouveau wav
     mod_menu.add_command(label=lang["save_wav"], command=save_as_wav)
+    # Menu Filtre
+    filter_menu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
+    filter_menu.add_command(label=lang["filter_band"], command=apply_filter_band)
+    filter_menu.add_command(label=lang["mean"], command=mean_filter)
+    filter_menu.add_command(label=lang["median_filter"], command=apply_median_filter)
+    filter_menu.add_command(label=lang["moving_average"], command=apply_moving_average)
+    filter_menu.add_command(label=lang["wiener_filter"], command=apply_wiener_filter)
+    filter_menu.add_command(label=lang["fir_filter"], command=apply_fir_filter)
+    filter_menu.add_command(label=lang["matched_filter"], command=apply_matched_filter)
     # Analyse du signal
     # Puissance
     power_menu.add_command(label=lang["psf"], command=psf)
     power_menu.add_command(label=lang["mts"], command=mts)
     power_menu.add_command(label=lang["pseries"], command=pseries)
+    power_menu.add_command(label=lang["cyclospectrum"], command=cyclospectrum)
     power_menu.add_command(label=lang["dsp"], command=dsp)
     power_menu.add_command(label=lang["dsp_max"], command=dsp_max)
     power_menu.add_command(label=lang["time_amp"], command=time_amplitude)
@@ -2193,6 +2281,10 @@ load_lang_changes()
 def on_close():
     root.quit()  # Stop mainloop
     root.destroy()  # Détruit la fenêtre, libère les ressources
+
+if drag_drop is True :
+    root.drop_target_register(DND_FILES)
+    root.dnd_bind("<<Drop>>", on_file_drop)
 
 # Menu
 root.config(menu=menu_bar)

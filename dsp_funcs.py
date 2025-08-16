@@ -1,5 +1,6 @@
 """Fonctions DSP annexes"""
 import numpy as np
+from scipy.signal import find_peaks
 
 # Flattop window
 def flattop_window(N):
@@ -15,51 +16,68 @@ def flattop_window(N):
     a4 = 0.0322
 
     n = np.arange(0, N)
-    term0 = a0
-    term1 = -a1 * np.cos(2 * np.pi * n / (N - 1))
-    term2 = a2 * np.cos(4 * np.pi * n / (N - 1))
-    term3 = -a3 * np.cos(6 * np.pi * n / (N - 1))
-    term4 = a4 * np.cos(8 * np.pi * n / (N - 1))
+    w = (
+        a0
+        - a1 * np.cos(2 * np.pi * n / (N - 1))
+        + a2 * np.cos(4 * np.pi * n / (N - 1))
+        - a3 * np.cos(6 * np.pi * n / (N - 1))
+        + a4 * np.cos(8 * np.pi * n / (N - 1))
+    )
 
-    return term0 + term1 + term2 + term3 + term4
+    return w / np.max(w)
 
-# Fonctions pour centrer signal
-def find_peaks_prominence(spectrum, proeminence=0.1): # imite scipy.signal.find_peaks
-    """Recherche de pics proéminents"""
-    peaks = []
-    for i in range(1, len(spectrum) - 1):
-        is_peak = True
-        if spectrum[i] <= spectrum[i-1] or spectrum[i] <= spectrum[i+1]:
-            is_peak = False
+# Blackman-Harris 7-term window
+def blackman_harris_7term_window(N):
+    """Fenêtre 7-term Blackman-Harris ()"""
+    if N < 1:
+        return np.array([])
 
-        if is_peak:
-            for j in range(max(0, i-5), min(len(spectrum), i+5)):  # voisinage
-                if i != j and spectrum[i] - spectrum[j] < proeminence * np.max(spectrum):
-                    is_peak = False
-                    break
-        if is_peak:
-            peaks.append(i)
-    return np.array(peaks)
+    # Coefficients pour la fenêtre Blackman-Harris 7-term (source : National Instruments, H.H. Albrecht)
+    a0 = 0.27105140069342
+    a1 = 0.43329793923448
+    a2 = 0.21812299954311
+    a3 = 0.06592544638803
+    a4 = 0.01081174209837
+    a5 = 0.00077658482522
+    a6 = 0.00001388721735
 
-def center_signal(iq_wave, frame_rate, proeminence=0.1):
+    n = np.arange(0, N)
+    w = (
+        a0
+        - a1 * np.cos(2 * np.pi * n / (N - 1))
+        + a2 * np.cos(4 * np.pi * n / (N - 1))
+        - a3 * np.cos(6 * np.pi * n / (N - 1))
+        + a4 * np.cos(8 * np.pi * n / (N - 1))
+        - a5 * np.cos(10 * np.pi * n / (N - 1))
+        + a6 * np.cos(12 * np.pi * n / (N - 1))
+    )
+
+    return w / np.max(w)
+
+def gaussian_window(N, sigma=0.4):
+    """Fenêtre gaussienne pour la FFT"""
+    if N < 1:
+        return np.array([])
+    n = np.arange(0, N)
+    return np.exp(-0.5 * ((n - (N-1)/2) / (sigma * (N-1)/2))**2)
+
+def center_signal(iq_wave, frame_rate, prominence=0.1):
     """Fonction de centrage du signal sur pics proéminents"""
     N = len(iq_wave)
     t = np.arange(N) / frame_rate
 
-    window = np.hanning(N)
-    windowed_iq = iq_wave * window
-    spectrum = np.fft.fftshift(np.fft.fft(windowed_iq))
+    spectrum = np.fft.fftshift(np.fft.fft(iq_wave))
     f = np.fft.fftfreq(N, 1/frame_rate)
     f = np.fft.fftshift(f)
 
-    peaks_indices = find_peaks_prominence(np.abs(spectrum), proeminence)  # Get indices of peaks
+    peaks_indices, _ = find_peaks(np.abs(spectrum), prominence=prominence)  # indices des pics
 
     if len(peaks_indices) < 2:
         print("Moins de 2 pics trouvés pour recentrer le signal.")
         return None
 
     peak_freqs = f[peaks_indices]
-    # Sort par mag
+    # Sort par puissance
     sorted_indices = np.argsort(np.abs(spectrum[peaks_indices]))[::-1]
     top_2_indices = sorted_indices[:2]
     peak1_freq = peak_freqs[top_2_indices[0]]
@@ -69,3 +87,26 @@ def center_signal(iq_wave, frame_rate, proeminence=0.1):
     iq_shifted = iq_wave * np.exp(-1j * 2 * np.pi * center_freq * t)
 
     return iq_shifted, center_freq
+
+def get_window(window_type, N):
+    """Retourne la fenêtre appropriée selon le type"""
+    if window_type == 'flattop':
+        return flattop_window(N)
+    elif window_type == 'blackmanharris7term':
+        return blackman_harris_7term_window(N)
+    elif window_type == 'hann':
+        return np.hanning(N)
+    elif window_type == 'hamming':
+        return np.hamming(N)
+    elif window_type == 'blackman':
+        return np.blackman(N)
+    elif window_type == 'kaiser':
+        return np.kaiser(N, beta=14)
+    elif window_type == 'bartlett':
+        return np.bartlett(N)
+    elif window_type == 'rectangular':
+        return np.ones(N)
+    elif window_type == 'gaussian':
+        return gaussian_window(N)
+    else:
+        raise ValueError(f"Type de fenêtre inconnu : {window_type}")    

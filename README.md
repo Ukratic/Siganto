@@ -16,44 +16,49 @@ Be aware that the entire file is displayed, not looped over as many other SDR to
 - Load a .wav file. The button reloads the same file if clicked again. Select the button next to it to close the .wav file before loading another.<br>
 Spectrogram shown when a file is loaded.
 - Activate measuring cursors (deactivated by default upon loading a new graph). Distance between 2 cursors is shown and you can also jump to a nearby peak.
+- Change language (English and French available)
+- Display frequency & power information of the signal file (Estimated BW, dB level, symbol rate & ACF)
+#### 2. Signal modification
 - Change FFT parameters :<br>
 Window size (default based on number of samples), <br>
 Window function (Kaiser, Hann, Hamming, Blackman, Bartlett, Flattop, Rectangular), <br>
 Overlap.
-- Change language (English and French available)
-- Display frequency & power information of the signal file (Estimated BW, dB level, symbol rate & ACF)
-- Modify parameters for transition (phase, frequency) & persistence graphs
-#### 2. Signal modification
-- Filtering : Low/High/Band Pass, FIR, Wiener, Gaussian, Median, Moving average, Mean.
+
 - Central Frequency offset (enter a value, cursor selection or fine-tuning with arrow keys ; last option available only on tri-graph group for now)
 - Down or Up Sampling (by ratio of an integer >1)
 - Cut part of the signal in time (enter a value or by cursor selection ; the latter only works reliably on spectrogram)
+- Modify parameters for transitions (phase, frequency) & persistence graphs
 - Save as a new .wav file
-#### 3. Main graphs
+#### 4. Filters
+- Low/High/Band Pass
+- FIR, Wiener, Median, Moving average, Mean
+- Matched Filter : Gaussian, Raised Cosine, Root Raised Cosine, Sinc, Rsinc, Rectangular
+#### 4. Main graphs
 - Spectrogram (STFT & 3D)
 - Groups combining graphs on the same window
-#### 4. Power Metrics
+#### 5. Power Metrics
 - Power Spectrum FFT (and variant)
-- Signal power
+- Signal power FFT
+- Cyclospectrum FFT
 - PSD (and variant)
 - Time/Amplitude (IQ samples)
-#### 5. Frequency Metrics
+#### 6. Frequency Metrics
 - Persistence Spectrum
 - Frequency Distribution
 - Frequency Transitions
-#### 6. Phase Metrics
+#### 7. Phase Metrics
 - Constellation
 - Phase Spectrum
 - Phase Distribution
 - Phase Transitions
-#### 7. Cyclostationarity Metrics
+#### 8. Cyclostationarity Metrics
 - Autocorrelation function (fft-based fast variant or complete)
-#### 8. OFDM Metrics
+#### 9. OFDM Metrics
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
-#### 9. Demodulation
+#### 10. Demodulation
 - 2 & 4 FSK Demodulation (outputs a stream of bits and graph of transitions)
 - AM & FM Demodulation (visual output and result signal saved for playback or further analysis)
-#### 10. Audio
+#### 11. Audio
 - Audio playback (when listening to an amplitude modulated signal for instance, use the appropriate demodulation in the corresponding tab prior to audio playback)
 
 ### Examples :
@@ -87,7 +92,7 @@ Overlap.
 
 - *V1.07* : <br>
 -- AM/FM demodulation.<br>
--- Audio Output (optional feature adding the sounddevice library as dependency).<br>
+-- Audio Output (optional feature adding the sounddevice library as a dependency).<br>
 -- Bug fixes on existing features.<br>
 
 - *V1.08* : <br>
@@ -97,11 +102,15 @@ Overlap.
 -- Handling of various WAV encodings made more robust (PCM & IEEE float).<br>
 -- Bug fixes on existing features (transitions smoothing & frequency distribution).<br>
 
-*Planned for V1.09* :<br>
--- Windowing options also used on PSD, phase & frequency transitions (currently only spectrogram). <br>
--- 2 & 4 PSK demodulation.<br>
--- Streamlining filtering options.<br>
--- Matched filter.<br>
+- *V1.09* :<br>
+-- Windowing options also used on PSD, phase & frequency transitions (previously only spectrogram). <br>
+-- Streamlining filtering options and added Matched Filter<br>
+-- Cyclospectrum added to Power Metrics. Expanded symbol rate estimation in the information window.<br>
+-- Drag & drop files instead of opening a file dialog (optional feature adding the tkinterdnd2 library as a dependency).<br>
+
+*Planned for later :*<br>
+-- PSK demodulation.<br>
+-- Cursor selection improvement.<br>
 
 
 ### Using the app

@@ -9,24 +9,9 @@ def compute_spectrogram(iq_wave, frame_rate, N, window_func='hann'):
     # Calcule nb de lignes pour la matrice
     num_rows = len(iq_wave) // N
     spectrogram = np.zeros((num_rows, N))
-    # Calc spectrogramme
     # Choix de fenetre
-    if window_func == 'hann':
-        window = np.hanning(N)
-    elif window_func == 'hamming':
-        window = np.hamming(N)
-    elif window_func == 'blackman':
-        window = np.blackman(N)
-    elif window_func == 'kaiser':
-        window = np.kaiser(N, beta=14) # valeurs de beta plus basses trop similaires à hamm/hann/blackman (et 0 = rect). Envisager choix de valeur 
-    elif window_func == 'bartlett':
-        window = np.bartlett(N)
-    elif window_func == 'flattop':
-        window = df.flattop_window(N)
-    elif window_func == 'rect':
-        window = np.ones(N)
-    else:
-        raise ValueError("Fenêtre non supportée")
+    window = df.get_window(window_func, N)
+    # Calc spectrogramme
     for i in range(num_rows):
         chunk = iq_wave[i*N:(i+1)*N] * window
         spectrogram[i, :] = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(chunk)))**2)
@@ -43,22 +28,7 @@ def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
     step_size = window_size - overlap
     num_windows = (len(iq_wave) - overlap) // step_size
     # Choix de fenetre
-    if window_func == 'hann':
-        window = np.hanning(window_size)
-    elif window_func == 'hamming':
-        window = np.hamming(window_size)
-    elif window_func == 'blackman':
-        window = np.blackman(window_size)
-    elif window_func == 'kaiser':
-        window = np.kaiser(window_size, beta=14)
-    elif window_func == 'bartlett':
-        window = np.bartlett(window_size)
-    elif window_func == 'flattop':
-        window = df.flattop_window(window_size)
-    elif window_func == 'rect':
-        window = np.ones(window_size)
-    else:
-        raise ValueError("Fenêtre non supportée")
+    window = df.get_window(window_func, window_size)
     # Output arrays
     stft_matrix = []
     times = []
@@ -85,16 +55,18 @@ def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
     return freqs, np.array(times), 20 * np.log10(np.abs(stft_matrix))
 
 # DSP
-def compute_dsp(iq_wave, frame_rate, N, overlap=0.5):
+def compute_dsp(iq_wave, frame_rate, N, overlap=0.5, window_type='hann'):
     """Densité spectrale de puissance"""
-    step_size = int(N * (1 - overlap))  # Step selon overlap
-    num_windows = (len(iq_wave) - N) // step_size + 1  # Nb fenêtres
+    step_size = N - overlap  # match STFT
+    num_windows = (len(iq_wave) - overlap) // step_size
     psd_sum = np.zeros(N)
+    window = df.get_window(window_type, N)
     # Loop fenêtres
     for i in range(num_windows):
         start = i * step_size
         end = start + N
         segment = iq_wave[start:end]
+        segment = segment * window
         # Compute FFT**2
         fft_result = np.fft.fft(segment, N)
         psd_sum += np.abs(fft_result) ** 2
@@ -107,9 +79,9 @@ def compute_dsp(iq_wave, frame_rate, N, overlap=0.5):
     return freqs, psd
 
 # Mesure de la largeur de bande
-def estimate_bandwidth(iq_wave, frame_rate, N):
+def estimate_bandwidth(iq_wave, frame_rate, N, overlap=0.5, window_type='hann'):
     """Estimation de BW à partir de la DSP"""
-    freqs, dsp = compute_dsp(iq_wave, frame_rate, N)
+    freqs, dsp = compute_dsp(iq_wave, frame_rate, N, overlap, window_type)
     # DSP normalisée pour le seuil de la largeur de bande
     dsp_normalisee = dsp / max(dsp)
     # Seuil de la largeur de bande : quart de la DSP normalisée

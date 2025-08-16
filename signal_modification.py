@@ -1,7 +1,6 @@
 """Fonctions de base pour filtrer, sous-échantillonner, sur-échantillonner, mesurer la largeur de bande"""
 
 from scipy.signal import butter, filtfilt, resample, medfilt, wiener, firwin, lfilter, convolve
-from scipy.signal.windows import gaussian
 import numpy as np
 
 def bandpass_filter(iq_wave, lowcut, highcut, frame_rate, order=4):
@@ -68,10 +67,10 @@ def median_filter(iq_wave, kernel_size=3):
     """Applique un filtre médian pour réduire le bruit"""
     if kernel_size < 1 or kernel_size % 2 == 0 or not isinstance(kernel_size, int):
         raise ValueError("La taille du noyau doit être un entier positif impair.")
-        # fix complex128 not handled by medfilt
-    if iq_wave.dtype == np.complex128:
-        iq_wave = iq_wave.astype(np.float64)
-    return medfilt(iq_wave, kernel_size=kernel_size)
+    real_part_filtered = medfilt(np.real(iq_wave), kernel_size=kernel_size)
+    imag_part_filtered = medfilt(np.imag(iq_wave), kernel_size=kernel_size)
+    filtered_complex_data = real_part_filtered + 1j * imag_part_filtered
+    return filtered_complex_data
 
 def moving_average(iq_wave, window_size):
     """Applique une moyenne mobile pour lisser le signal"""
@@ -104,35 +103,38 @@ def fir_filter(iq_wave, fs, cutoff, filter_type='lowpass', numtaps=101):
     taps = firwin(numtaps, norm_cutoff, pass_zero=filter_type)
     return lfilter(taps, 1.0, iq_wave)
 
-def gaussian_filter(iq_wave, sigma):
-    """Applique un filtre gaussien pour lisser le signal IQ"""
-    if sigma <= 0:
-        raise ValueError("sigma doit être un nombre positif.")
-    M = int(6 * sigma + 1)  # Taille du noyau
-    if M % 2 == 0:  # Assurez-vous que M est impair
-        M += 1
-    if M < 1:
-        raise ValueError("La taille du noyau doit être au moins 1.")
-    kernel = gaussian(M, std=sigma)
-    kernel /= np.sum(kernel)  # Normalisation du noyau
-    
-    return convolve(iq_wave, kernel, mode='same')
-
-def matched_filter(iq_wave, template):
-    """Applique un filtre adapté pour détecter un motif spécifique dans le signal IQ"""
-    if not isinstance(template, (list, np.ndarray)):
-        raise ValueError("template doit être une liste ou un tableau numpy.")
-    if len(template) == 0:
-        raise ValueError("template ne peut pas être vide.")
-    from scipy.signal import correlate
-    correlation = correlate(iq_wave, template, mode='same')
-    return correlation / np.max(np.abs(correlation))  # Normalisation
-
-
-
-# A ajouter dans gui_main.py pour les options de filtrage:
-# Filtre médian : OK
-# Filtre moyenne mobile (taille fenêtre) : 5 = Léger, 11 = Modéré, 21 = Fort. Dynamique = int(sr / symbol_rate)
-# Filtre de Wiener (taille fenêtre) : 7 = Léger, 15 = Modéré, 31 = Fort. Dynamique = int(sr / symbol_rate) * facteur (0.5 à 2.0)
-# Filtre FIR (Taps) : 11 = Léger, 31 = Modéré, 61 = Fort. Dynamique = 4 * (sr / symbol_rate) + 1
-# Filtre gaussien (sigma) : 0.5 = Léger, 1.5 = Modéré, 3.0 = Fort. Dynamique = (sr / symbol_rate) / 4
+def matched_filter(iq_wave, frame_rate, symbol_rate, factor=0.5, pulse_shape='rectangular'):
+    """Applique un filtre adapté pour un motif spécifique dans le signal"""
+    sps = int(round(frame_rate / symbol_rate))
+    if sps < 1:
+        raise ValueError("Le taux d'échantillonnage par symbole (sps) doit être au moins 1.")
+    # Calcul de la longueur du noyau en fonction du facteur
+    if pulse_shape == 'rectangular':
+        kernel = np.ones(sps)
+    elif pulse_shape == 'gaussian':
+        BT = factor
+        t = np.arange(-3*sps, 3*sps+1)
+        alpha = np.sqrt(np.log(2)) / (BT * sps)
+        kernel = np.exp(-0.5 * (alpha * t)**2)
+    elif pulse_shape in ('raised_cosine', 'root_raised_cosine'):
+        # RC ou RRC
+        beta = factor
+        span = 6  # nombre de symboles
+        t = np.arange(-span*sps, span*sps+1) / sps
+        kernel = np.sinc(t)
+        kernel *= np.cos(np.pi*beta*t) / (1 - (2*beta*t)**2 + 1e-12)  # RC formula
+        if pulse_shape == 'root_raised_cosine':
+            kernel = np.sqrt(np.abs(kernel))
+    elif pulse_shape in ('sinc', 'rsinc'):
+        span = 6
+        t = np.arange(-span*sps, span*sps+1) / sps
+        kernel = np.sinc(t)
+        if pulse_shape == 'rsinc':
+            kernel = np.sqrt(kernel)
+    else:
+        raise ValueError("Le filtre de mise en forme doit être 'rectangular', 'gaussian', 'raised_cosine', 'root_raised_cosine' ou 'sinc'.")
+    # Normalisation du noyau pour éviter l'amplification du signal
+    kernel /= np.sum(kernel)
+    # Application du filtre adapté
+    filtered_signal = convolve(iq_wave, kernel, mode='same')
+    return filtered_signal
