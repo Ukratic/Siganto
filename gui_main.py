@@ -273,7 +273,7 @@ def plot_initial_graphs():
 # Fonc pour changer la taille de fenêtre FFT
 def define_N():
     global N, overlap_value, overlap
-    N = int(tk.simpledialog.askstring("N", lang["define_n"]))
+    N = int(tk.simpledialog.askstring("N", lang["define_n"], parent=root))
     if N is None:
         if debug is True:
             print("Taille de fenêtre FFT non définie")
@@ -482,7 +482,7 @@ def spectre_persistance():
 # paramètres pour le spectre de persistance : nombre de bins
 def param_spectre_persistance():
     global persistance_bins
-    persistance_bins = tk.simpledialog.askstring(lang["params"], lang["pers_bins"])
+    persistance_bins = tk.simpledialog.askstring(lang["params"], lang["pers_bins"], parent=root)
     if persistance_bins is None:
         persistance_bins = 50
         if debug is True:
@@ -496,7 +496,7 @@ def param_spectre_persistance():
 # params pour les fonctions de transitions de phase et de fréquence : lissage optionnel
 def set_diff_params():
     global diff_window
-    diff_window = tk.simpledialog.askstring(lang["params"], lang["smoothing_val"])
+    diff_window = tk.simpledialog.askstring(lang["params"], lang["smoothing_val"], parent=root)
     if diff_window is None:
         diff_window = 0
         if debug is True:
@@ -510,7 +510,7 @@ def set_diff_params():
 # params pour les fonctions de transitions de phase et de fréquence : lissage optionnel
 def set_hist_bins():
     global hist_bins
-    hist_bins = tk.simpledialog.askstring(lang["params"], lang["hist_bins"])
+    hist_bins = tk.simpledialog.askstring(lang["params"], lang["hist_bins"], parent=root)
     if hist_bins is None:
         hist_bins = 1000
         if debug is True:
@@ -523,7 +523,7 @@ def set_hist_bins():
 
 def set_overlap():
     global overlap, overlap_value
-    enter_overlap = tk.simpledialog.askstring(lang["params"], lang["overlap_val"])
+    enter_overlap = tk.simpledialog.askstring(lang["params"], lang["overlap_val"], parent=root)
     if enter_overlap is None or enter_overlap == "" or int(enter_overlap) < 2:
         tk.messagebox.showinfo(lang["error"], lang["overlap_valid"])
         overlap = N//overlap_value
@@ -640,7 +640,7 @@ def display_file_info():
 def move_frequency():
     # déplacement de la fréquence centrale (valeur entrée par l'utilisateur)
     global iq_wave, frame_rate
-    fcenter = float(tk.simpledialog.askstring(lang["fc"], lang["move_txt"]))
+    fcenter = float(tk.simpledialog.askstring(lang["fc"], lang["move_txt"], parent=root))
     if fcenter is None:
         if debug is True:
             print("Modification de fréquence centrale annulée, valeur non définie")
@@ -732,7 +732,7 @@ def mean_filter():
     tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.wait_window()
     if mean_filter.get() == lang["def_level"]:
-        iq_floor = float(tk.simpledialog.askstring(lang["level"], lang["enter_level"]))
+        iq_floor = float(tk.simpledialog.askstring(lang["level"], lang["enter_level"], parent=root))
         iq_wave = np.where(10*np.log10(np.abs(iq_wave)**2) < iq_floor, 0, iq_wave)
         if iq_floor is None:
             if debug is True:
@@ -753,7 +753,7 @@ def mean_filter():
 def downsample_signal():
     # sous-échantillonnage
     global iq_wave, frame_rate
-    rate = tk.simpledialog.askstring(lang["downsample"], lang["down_value"])
+    rate = tk.simpledialog.askstring(lang["downsample"], lang["down_value"], parent=root)
     if rate is None:
         if debug is True:
             print("Taux de sous-échantillonnage non défini")
@@ -767,7 +767,7 @@ def downsample_signal():
 def upsample_signal():
     # sur-échantillonnage
     global iq_wave, frame_rate
-    rate = tk.simpledialog.askstring(lang["upsample"], lang["up_value"])
+    rate = tk.simpledialog.askstring(lang["upsample"], lang["up_value"], parent=root)
     if rate is None:
         if debug is True:
             print("Taux de sur-échantillonnage non défini")
@@ -1237,7 +1237,7 @@ def phase_spectrum():
 # params pour les fonctions de différence de phase et de fréquence
 def set_diff_params():
     global diff_window
-    diff_window = tk.simpledialog.askstring(lang["params"], lang["smoothing_val"])
+    diff_window = tk.simpledialog.askstring(lang["params"], lang["smoothing_val"], parent=root)
     if diff_window is None:
         diff_window = 0
         if debug is True:
@@ -1252,7 +1252,7 @@ def alpha_from_symbol():
     global Tu, toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     # calcul de alpha frq à partir de la durée symbole OFDM (Tu), estimée par l'utilisateur avec la fonction d'autocorrélation
     # demander à l'utilisateur de rentrer la durée estimée de Tu
-    Tu = tk.simpledialog.askstring(lang["alpha"], lang["estim_tu"])
+    Tu = tk.simpledialog.askstring(lang["alpha"], lang["estim_tu"], parent=root)
     if Tu is None:
         if debug is True:
             print("Durée symbole OFDM non définie")
@@ -1285,7 +1285,7 @@ def ofdm_results():
     global Tu, toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     # Calcul des paramètres OFDM à partir de la fréquence alpha0 estimée par l'utilisateur
     # Demander à l'utilisateur de rentrer la fréquence alpha0 estimée
-    alpha_0 = tk.simpledialog.askstring(lang["alpha"], lang["alpha0"])
+    alpha_0 = tk.simpledialog.askstring(lang["alpha"], lang["alpha0"], parent=root)
     if alpha_0 is None:
         if debug is True:
             print("Fréquence alpha0 non définie")
@@ -1594,7 +1594,7 @@ def demod_fsk():
     elif param_mapping.get() == lang["mapping_gray"]:
         mapping = "gray"
     elif param_mapping.get() == lang["mapping_custom"]:
-        mapping = tk.simpledialog.askstring(lang["mapping_custom"], lang["mapping_custom_desc"])
+        mapping = tk.simpledialog.askstring(lang["mapping_custom"], lang["mapping_custom_desc"], parent=root)
         # actuellement un string sous forme de "0,1,2,3" ou "00,01,10,11" pour 4fsk. A transformer en liste
         mapping = list(eval(mapping))
 
@@ -1836,7 +1836,7 @@ def apply_median_filter():
     popup.wait_window()  # Attendre que l'utilisateur ferme la fenêtre
     if kernel_size.get() == "Custom":
         # Si l'utilisateur a choisi "Custom", on demande la taille du noyau
-        kernel_size = tk.simpledialog.askinteger(lang["median_filter"], lang["kernel_size"], minvalue=1)
+        kernel_size = tk.simpledialog.askinteger(lang["median_filter"], lang["kernel_size"], minvalue=1, parent=root)
     else:
         # Si l'utilisateur a choisi une option, on définit la taille du noyau en fonction de l'option choisie
         if kernel_size.get() == lang["light_filter"]:
@@ -1846,7 +1846,7 @@ def apply_median_filter():
         elif kernel_size.get() == lang["aggressive_filter"]:
             kernel_size = 9
         elif kernel_size.get() == lang["dynamic_filter"]:
-            symbol_rate = tk.simpledialog.askinteger(lang["median_filter"], "Bauds", minvalue=1)
+            symbol_rate = tk.simpledialog.askinteger(lang["median_filter"], "Bauds", minvalue=1, parent=root)
             kernel_size = int(frame_rate / (symbol_rate * 2)) | 1
         else:
             # Si l'utilisateur a choisi une option non reconnue, on affiche un message d'erreur
@@ -1895,7 +1895,7 @@ def apply_moving_average():
     popup.wait_window()  # Attendre que l'utilisateur ferme la fenêtre
     if window_size.get() == "Custom":
         # Si l'utilisateur a choisi "Custom", on demande la taille de fenêtre
-        window_size = tk.simpledialog.askinteger(lang["moving_average"], lang["filter_window"], minvalue=1)
+        window_size = tk.simpledialog.askinteger(lang["moving_average"], lang["filter_window"], minvalue=1, parent=root)
     else:
         # Si l'utilisateur a choisi une option, on définit la taille de fenêtre en fonction de l'option choisie
         if window_size.get() == lang["light_filter"]:
@@ -1905,7 +1905,7 @@ def apply_moving_average():
         elif window_size.get() == lang["aggressive_filter"]:
             window_size = 21
         elif window_size.get() == lang["dynamic_filter"]:
-            symbol_rate = tk.simpledialog.askinteger(lang["moving_average"], "Bauds", minvalue=1)
+            symbol_rate = tk.simpledialog.askinteger(lang["moving_average"], "Bauds", minvalue=1, parent=root)
             window_size = int(frame_rate / (symbol_rate)) | 1
         else:
             # Si l'utilisateur a choisi une option non reconnue, on affiche un message d'erreur
@@ -1935,8 +1935,8 @@ def apply_fir_filter():
         print(lang["no_file"])
         return
     # Demande la fréquence de coupure et le nombre de taps
-    cutoff_freq = tk.simpledialog.askfloat(lang["fir_filter"], lang["freq_pass"], minvalue=1, maxvalue=frame_rate/2)
-    num_taps = tk.simpledialog.askinteger(lang["fir_filter"], lang["fir_taps"], minvalue=1)
+    cutoff_freq = tk.simpledialog.askfloat(lang["fir_filter"], lang["freq_pass"], minvalue=1, maxvalue=frame_rate/2, parent=root)
+    num_taps = tk.simpledialog.askinteger(lang["fir_filter"], lang["fir_taps"], minvalue=1, parent=root)
     if cutoff_freq is None or num_taps is None:
         return
     try:
@@ -1954,8 +1954,8 @@ def apply_wiener_filter():
         return
     # Demande la taille du filtre Wiener et le bruit
     # Note: le bruit est estimé par l'utilisateur, pas calculé
-    size = tk.simpledialog.askinteger(lang["wiener_filter"], lang["size"], minvalue=1)
-    noise = tk.simpledialog.askfloat(lang["wiener_filter"], lang["noise_variance"], minvalue=0.0)
+    size = tk.simpledialog.askinteger(lang["wiener_filter"], lang["size"], minvalue=1, parent=root)
+    noise = tk.simpledialog.askfloat(lang["wiener_filter"], lang["noise_variance"], minvalue=0.0, parent=root)
     if noise is None and size is None:
         return # L'utilisateur a annulé. Une des 2 valeurs peut être nulle
     try:
@@ -1986,12 +1986,12 @@ def apply_matched_filter():
     popup.wait_window()
     pulse_shape = pulse_shape_var.get()
     # Demande la rapidité de modulation
-    symbol_rate = tk.simpledialog.askfloat(lang["matched_filter"], lang["symbol_rate"], minvalue=0.1)
+    symbol_rate = tk.simpledialog.askfloat(lang["matched_filter"], lang["symbol_rate"], minvalue=0.1, parent=root)
     if symbol_rate is None:
         return  # Annulation
     # Demande du facteur (optionnel)
     if pulse_shape in ('raised_cosine', 'root_raised_cosine', 'gaussian'):
-        factor = tk.simpledialog.askfloat(lang["matched_filter"], lang["filter_factor"], minvalue=0.0, maxvalue=1.0)
+        factor = tk.simpledialog.askfloat(lang["matched_filter"], lang["filter_factor"], minvalue=0.0, maxvalue=1.0, parent=root)
         if factor is None:
             return  # Annulation
     else:

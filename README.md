@@ -102,7 +102,7 @@ Overlap.
 -- Handling of various WAV encodings made more robust (PCM & IEEE float).<br>
 -- Bug fixes on existing features (transitions smoothing & frequency distribution).<br>
 
-- *V1.09* :<br>
+- *Will be in V1.09* :<br>
 -- Windowing options also used on PSD, phase & frequency transitions (previously only spectrogram). <br>
 -- Streamlining filtering options and added Matched Filter<br>
 -- Cyclospectrum added to Power Metrics. Expanded symbol rate estimation in the information window.<br>

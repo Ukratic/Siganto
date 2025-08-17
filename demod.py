@@ -103,7 +103,7 @@ def estimate_baud_rate(a, sample_rate, target_rate=None, precision=0.9, debug=Fa
     if debug:
         print("peak frequency index: %d / %d" % (p, len(f)))
         print("estimated baud rate: %f symbols/s" % baud_rate)
-    return baud_rate
+    return baud_rate[0]
 
 # convert soft symbols into bits (assuming binary symbols)
 def slice_binary(symbols):
