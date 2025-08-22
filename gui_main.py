@@ -28,7 +28,7 @@ loading_end = Event()
 def loading_libs():
     # Librairies
     print("Chargement des dépendances...")
-    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm, df, dm, scrolledtext, ttk, sd
+    global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm, df, dm, scrolledtext, ttk, sd, string
     import struct
     import gc
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -43,6 +43,7 @@ def loading_libs():
     import signal_modification as sm
     import dsp_funcs as df
     import demod as dm
+    import string
 
     if with_sound:
         from tkinter import ttk
@@ -81,6 +82,8 @@ filepath = None
 frame_rate = None
 iq_wave = None
 bw = None
+mono_real = True
+convert_button = False
 N = 512 # taille de la fenêtre FFT par défaut
 overlap_value = 4 # valeur de recouvrement par défaut
 overlap = N//overlap_value # recouvrement de la STFT
@@ -127,7 +130,7 @@ def find_sample_width(file_path):
     return bits_per_sample , audio_format
 
 def load_wav():
-    global filepath, frame_rate, iq_wave, N, overlap, corr
+    global filepath, frame_rate, iq_wave, N, overlap, corr, convert_button
     if filepath is None:
         filepath = tk.filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if not filepath:
@@ -148,19 +151,26 @@ def load_wav():
             if abs(corr) > 0.99:
                 if debug is True:
                     print("Attention: canaux droite & gauche identiques. On force en mono.")
-                # Pas bien joli d'importer scipy.signal ici juste pour ça, mais c'est le plus simple 
-                import scipy.signal as sc
                 mono_signal = left
-                analytic_signal = sc.hilbert(mono_signal)
+                analytic_signal = sm.hilbert(mono_signal)
                 iq_wave = analytic_signal
             else:
                 iq_wave = left + 1j*right
         elif s_wave.ndim == 1:
-            # Mono → on suppose I/Q intercalé
-            left = s_wave[0::2].astype(np.float32)
-            right = s_wave[1::2].astype(np.float32)
-            min_len = min(len(left), len(right))
-            iq_wave = left[:min_len] + 1j * right[:min_len]
+            # Mono → 2 hypothèses
+            if not convert_button:
+                load_mono_button.pack(side=tk.LEFT, padx=5)
+                convert_button = True
+            if mono_real is True:
+                iq_wave = sm.hilbert(s_wave)
+                iq_wave = iq_wave * np.exp(-1j*2*np.pi*(frame_rate//4)*np.arange(len(iq_wave))/frame_rate)
+                iq_wave, frame_rate = sm.downsample(iq_wave, frame_rate, 2)
+            else:
+                left = s_wave[0::2].astype(np.float32)
+                right = s_wave[1::2].astype(np.float32)
+                min_len = min(len(left), len(right))
+                iq_wave = left[:min_len] + 1j * right[:min_len]
+
         else:
             raise ValueError("Format WAV inattendu")
     except:
@@ -169,8 +179,10 @@ def load_wav():
         tk.messagebox.showerror(lang["error"], lang["wav_conversion"])
     if len(iq_wave) > 1e6: # si plus d'un million d'échantillons
         N = 4096
+    elif 1e5 < len(iq_wave) < 1e6 :
+        N = 1024
     elif len(iq_wave) < frame_rate: # si moins d'une seconde
-        N = (frame_rate//25)*(len(iq_wave)/frame_rate) # résolution de 25 Hz par défaut, plus proportionnellement à la durée si inférieur à 1 seconde
+        N = (frame_rate//25)*(len(iq_wave)/frame_rate) # base de résolution = 25 Hz par défaut, proportionnellement à la durée si inférieur à 1 seconde
         N = (int(N/2))*2 # N pair de préférence
         if N < 4: # taille minimum de 4 échantillons
             N = 4
@@ -188,6 +200,17 @@ def on_file_drop(event):
     if files:
         filepath = files[0]  # take first dropped file
         load_wav()    
+
+def load_real():
+    global mono_real
+    if mono_real is True:
+        mono_real = False
+        load_mono_button.config(text=lang["mono_iq"])
+    else:
+        mono_real = True
+        load_mono_button.config(text=lang["mono_real"])
+
+    load_wav()
 
 # fonc de nettoyage graphe
 def clear_plot():
@@ -1619,11 +1642,14 @@ def demod_fsk():
             print(lang["no_file"])
             return
         ax = plt.subplot()
+        # regroupe bits en symboles
+        num_bits = int(np.ceil(np.log2(order)))
+        symbols = np.reshape(bits[: len(bits) // num_bits * num_bits], (-1, num_bits))
+        bits_plot = np.array([int("".join(map(str, s)), 2) for s in symbols])
         if len(bits) > 5000: # graphe allégé si signal long
-            bits_plot = bits[:5000]
+            bits_plot = bits_plot[:5000]
             fig.suptitle(f"{lang['estim_bits']} {lang["short_bits"]}")
-        else:
-            bits_plot = bits
+
         ax.plot(bits_plot, "o-")
         ax.set_xlabel("Bits")
         ax.set_ylabel(lang["bits_value"])
@@ -1712,9 +1738,8 @@ def demod_mfsk():
     popup.title(lang["demod_param"])
     # popup.geometry("350x250")
     param_method = tk.StringVar()
-    param_method.set("Méthode")
-    tk.Radiobutton(popup, text="Basée sur les différences discrètes dans le temps (pré-filtrage nécessaire)", variable=param_method, value="main").pack()
-    tk.Radiobutton(popup, text="Basée sur la détection des pics dans la STFT (Goertzel - Viterbi)", variable=param_method, value="alt").pack()
+    tk.Radiobutton(popup, text=lang["mfsk_discrete_diff"], variable=param_method, value="main").pack()
+    tk.Radiobutton(popup, text=lang["mfsk_tone_detection"], variable=param_method, value="alt").pack()
     param_method.set("main")
     param_order = tk.StringVar()
     tk.Label(popup, text=lang["param_order"]).pack()
@@ -1744,13 +1769,14 @@ def demod_mfsk():
         clock = dm.estimate_baud_rate(freq_diff, frame_rate, target_rate, precision, debug)
     else:
         clock = float(target_rate.get())
+    order = int(param_order.get())
     if param_mapping.get() == lang["mapping_nat"]:
         mapping = "natural"
     elif param_mapping.get() == lang["mapping_gray"]:
         mapping = "gray"
     elif param_mapping.get() == lang["mapping_non-binary"]:
         mapping = "non-binary"
-        return_format = "int"
+        return_format = "char"
 
     try:
         if debug is True:
@@ -1759,7 +1785,7 @@ def demod_mfsk():
             symbols, clock = dm.wpcr(freq_diff, frame_rate, clock, tau, precision, debug)
         elif param_method.get() == "alt":
         # EXPERIMENTAL
-            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_wave, frame_rate, clock, num_tones=int(param_order.get()), peak_thresh_db=8, switch_penalty=0.05)       
+            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_wave, frame_rate, clock, num_tones=order, peak_thresh_db=8, switch_penalty=0.05)       
             tone_freq /= np.max(np.abs(tone_freq))
             symbols, _ = dm.wpcr(tone_freq, frame_rate, target_rate=None, tau=tau, precision=precision, debug=debug)
         if len(symbols) > 2:
@@ -1776,11 +1802,25 @@ def demod_mfsk():
             print(lang["no_file"])
             return
         ax = plt.subplot()
-        if len(bits) > 5000:
-            bits_plot = bits[:5000]
-            fig.suptitle(f"{lang['estim_bits']} {lang['short_bits']}")
+        if return_format == "binary":
+            # group bits into symbols
+            num_bits = int(np.ceil(np.log2(order)))
+            symbols = np.reshape(bits[: len(bits) // num_bits * num_bits], (-1, num_bits))
+            bits_plot = np.array([int("".join(map(str, s)), 2) for s in symbols])
+        elif return_format == "char":
+            charset = (string.digits + string.ascii_uppercase + string.ascii_lowercase + string.punctuation) # charset récupéré de la fonction demod.slice_mfsk
+            mapping = {ch: i for i, ch in enumerate(charset)}
+            bits_plot = np.array([mapping[ch] for ch in bits if ch in mapping])
+            ax.set_yticks(range(len(charset)))
+            ax.set_yticklabels(list(charset))
         else:
             bits_plot = bits
+            ax.set_yticks(range(order))
+            ax.set_yticklabels(range(order))
+
+        if len(bits) > 5000:
+            bits_plot = bits_plot[:5000]
+            fig.suptitle(f"{lang['estim_bits']} {lang['short_bits']}")
         ax.plot(bits_plot, "o-")
         ax.set_xlabel("Bits")
         ax.set_ylabel(lang["bits_value"])
@@ -1802,7 +1842,7 @@ def demod_mfsk():
     try:
         text_output = f"{lang['estim_bits']} ({len(bits)}). {lang['clock_frequency']} {clock} Hz : \n"
         # lignes de bits
-        if return_format == "int":
+        if return_format == "int" or return_format == "char":
             # si format int, on sépare par une virgule chaque symbole
             formatted_bits = ",".join(map(str, bits))
             text_output += formatted_bits
@@ -1872,7 +1912,8 @@ def apply_median_filter():
         if debug is True:
             print(f"Filtre médian de taille {kernel_size} appliqué")
     except Exception as e:
-        print(f"Erreur lors de l'application du filtre médian: {e}")
+        if debug:
+            print(f"Erreur lors de l'application du filtre médian: {e}")
     plot_initial_graphs()
 
 def apply_moving_average():
@@ -1926,7 +1967,8 @@ def apply_moving_average():
         if debug is True:
             print(f"Moyenne mobile de taille {window_size} appliquée")
     except Exception as e:
-        print(f"Erreur lors de l'application de la moyenne mobile: {e}")
+        if debug:
+            print(f"Erreur lors de l'application de la moyenne mobile: {e}")
     plot_initial_graphs()
 
 def apply_fir_filter():
@@ -1963,7 +2005,8 @@ def apply_wiener_filter():
         if debug is True:
             print(f"Filtre Wiener de taille {size} appliqué avec variance de bruit {noise}")
     except Exception as e:
-        print(f"Erreur lors de l'application du filtre Wiener: {e}")
+        if debug:
+            print(f"Erreur lors de l'application du filtre Wiener: {e}")
     plot_initial_graphs()
 
 # Fonction pour appliquer un filtre adapté
@@ -2267,6 +2310,7 @@ close_button = tk.Button(button_frame, text=lang["close"], command=close_wav)
 close_button.pack(side=tk.LEFT, padx=5)
 shift_button = tk.Button(button_frame, text=lang["shift_frq"], command=shift_frequency)
 shift_button.pack(side=tk.LEFT, padx=5)
+load_mono_button = tk.Button(button_frame, text=lang["mono_real"], command=load_real)
 # Active/désactive curseurs
 mode_button = tk.Button(button_frame, text=lang["cursors_off"], command=toggle_cursor_mode)
 mode_button.pack(side=tk.RIGHT)

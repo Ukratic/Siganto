@@ -138,3 +138,21 @@ def matched_filter(iq_wave, frame_rate, symbol_rate, factor=0.5, pulse_shape='re
     # Application du filtre adapté
     filtered_signal = convolve(iq_wave, kernel, mode='same')
     return filtered_signal
+
+def hilbert(x):
+    N = len(x)
+    Xf = np.fft.fft(x)
+    h = np.zeros(N)
+    
+    if N % 2 == 0:
+        h[0] = 1
+        h[N//2] = 1
+        h[1:N//2] = 2
+    else:
+        h[0] = 1
+        h[1:(N+1)//2] = 2
+    
+    Xf *= h  # garde freq positives, zero négatives
+    x_analytic = np.fft.ifft(Xf)
+    
+    return x_analytic

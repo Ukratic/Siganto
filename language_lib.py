@@ -147,7 +147,7 @@ def get_fra_lib():
         "demod_psk" : "Démodulation PSK",
         "hist_bins": "Nombre de bins pour les distributions phase/fréquence (par défaut 1000) :",
         "param_hist_bins" : "Paramètres des distributions phase & fréquence",
-        "bits_value" : "Valeur des bits (0 ou 1)",
+        "bits_value" : "Symboles",
         "estim_bits" : "Bits démodulés",
         "short_bits" : "(5000 premiers sur le graphe)",
         "bits_fail" : "Echec de la démodulation",
@@ -204,6 +204,10 @@ def get_fra_lib():
         "pulse_shape" : "Filtre de mise en forme",
         "error_matched_filter" : "Erreur lors de l'application du filtre adapté",
         "estim_speed_4": "Estimation de rapidité de modulation par recherche de fréquence horloge :",
+        "mono_real" : "Mono : Réel",
+        "mono_iq" : "Mono : IQ",
+        "mfsk_discrete_diff" : "Basée sur les différences discrètes dans le temps (pré-filtrage et lissage nécessaire)",
+        "mfsk_tone_detection" : "Basée sur la détection des pics dans la STFT (Goertzel - Viterbi)",
 
     }
     return fra_lib
@@ -355,7 +359,7 @@ def get_eng_lib():
         "demod_psk" : "PSK Demodulation",
         "hist_bins": "Number of bins for the phase/frequency distributions (default 1000) :",
         "param_hist_bins": "Phase and Frequency Distribution Parameters",
-        "bits_value" : "Bits values (0 or 1)",
+        "bits_value" : "Symbols",
         "estim_bits" : "Demodulated bits",
         "short_bits" : "(first 5000 bits on the graph)",
         "bits_fail" : "Demodulation failure",
@@ -412,6 +416,10 @@ def get_eng_lib():
         "pulse_shape" : "Pulse Shaping",
         "error_matched_filter" : "Error when applying the matched filter",
         "estim_speed_4": "Symbol rate estimation with clock frequency detection : ",
+        "mono_real" : "Mono : Real",
+        "mono_iq" : "Mono : IQ",
+        "mfsk_discrete_diff" : "Based on discrete differences over time (pre-filtering & smoothing may be necessary)",
+        "mfsk_tone_detection" : "Based on tone detection in the STFT (Goertzel - Viterbi)",
 
     }
     return eng_lib

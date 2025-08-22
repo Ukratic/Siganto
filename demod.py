@@ -2,6 +2,7 @@
 Avec quelques modifications et ajouts pour compléter les cas d'usage"""
 import numpy as np
 import scipy.signal as signal
+import string
 
 # Commentaires et code de Michael laissés bruts pour mieux repérer les modifications
 
@@ -184,6 +185,20 @@ def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
     # Option pour renvoyer les indices en format entier
     if return_format == "int":
         return indices.astype(int)
+    
+    # Option pour renvoyer les indices en caractères : jusqu'à 94 symboles différents sur un seul caractère
+    if return_format == "char":
+        charset = (
+            string.digits +                # 0-9
+            string.ascii_uppercase +       # A-Z
+            string.ascii_lowercase +       # a-z
+            string.punctuation             # !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
+        )
+        # si on dépasse le charset : retombe sur format hexadécimal
+        if order > len(charset):
+            return np.array([format(i, "X") for i in indices], dtype=object)
+        else:
+            return np.array([charset[i] for i in indices], dtype=object)
 
     # Mapping des indices en bits
     num_bits = int(np.ceil(np.log2(order)))
