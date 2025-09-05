@@ -400,8 +400,8 @@ def set_window():
     global window_choice
     #dropdown pour choisir la fenêtre
     popup = tk.Toplevel()
+    place_relative(popup, root, 300, 300)
     popup.title(lang["window_choice"])
-    popup.geometry("300x300")
     window_list = tk.StringVar()
     window_list.set(window_choice)
     tk.Radiobutton(popup, text="Hann", variable=window_list, value="hann").pack()
@@ -615,7 +615,7 @@ def display_frq_info():
 
     popup = tk.Toplevel()
     popup.title(lang["frq_info"])
-    popup.geometry("600x200")
+    place_relative(popup, root, 600, 200)
     tk.Label(popup, text=f"{lang['high_freq']}: {f_pmax:.2f} Hz. {lang['low_freq']}: {f_pmin:.2f} Hz\n \
                     {lang['high_level']} {max_lvl:.2f}. {lang['low_level']} {low_lvl:.2f}.\n \
                     {lang['mean_level']} {mean_lvl:.2f} dB ").pack()
@@ -689,8 +689,9 @@ def apply_filter_high_low():
     # passage d'un filtre passe-haut ou passe-bas
     global iq_wave, frame_rate
     popup = tk.Toplevel()
+    popup.bind("<Return>", lambda event: popup.destroy())
     popup.title(lang["high_low"])
-    popup.geometry("300x200")
+    place_relative(popup, root, 300, 200)
     filter_type = tk.StringVar()
     filter_type.set(lang["low_val"])
     tk.Radiobutton(popup, text=lang["low_val"], variable=filter_type, value=lang["low_val"]).pack()
@@ -716,8 +717,9 @@ def apply_filter_band():
     # passage d'un filtre passe-bande
     global iq_wave, frame_rate
     popup = tk.Toplevel()
+    popup.bind("<Return>", lambda event: popup.destroy()) 
     popup.title(lang["bandpass"])
-    popup.geometry("300x200")
+    place_relative(popup, root, 300, 200)
     lowcut = tk.StringVar()
     highcut = tk.StringVar()
     tk.Label(popup, text=lang["freq_low"]).pack()
@@ -742,8 +744,9 @@ def mean_filter():
     global iq_wave
     # popup pour choisir entre appliquer ou définir le seuil
     popup = tk.Toplevel()
+    popup.bind("<Return>", lambda event: popup.destroy()) 
     popup.title(lang["mean"])
-    popup.geometry("300x150")
+    place_relative(popup, root, 300, 200)
     mean_filter = tk.StringVar()
     mean_filter.set(lang["not_apply"])
     # Afficher sur la popup la valeur de la variable
@@ -805,8 +808,9 @@ def cut_signal():
     # coupure du signal : entrer les points de début et de fin (en secondes)
     global iq_wave, frame_rate
     popup = tk.Toplevel()
+    popup.bind("<Return>", lambda event: popup.destroy())
+    place_relative(popup, root, 300, 300)
     popup.title(lang["cut_val"])
-    popup.geometry("300x200")
     start = tk.StringVar()
     end = tk.StringVar()
     tk.Label(popup, text=lang["start_cut"]).pack()
@@ -1318,8 +1322,9 @@ def ofdm_results():
     bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N,overlap,window_choice)
     # affiche BW estimée et demande de valider ou de redéfinir la bande passante
     popup = tk.Toplevel()
+    place_relative(popup, root, 600, 100)
+    popup.bind("<Return>", lambda event: popup.destroy())
     popup.title(lang["bandwidth"])
-    popup.geometry("600x100")
     tk.Label(popup, text=f"{lang['estim_bw']} :{round(bw,2)} Hz").pack()
     new_bw = tk.StringVar()
     tk.Label(popup, text=f"{lang['unreliable_sscarrier']}\n{lang['redef_bw'] }").pack()
@@ -1347,8 +1352,8 @@ def ofdm_results():
         print("Nombre de sous-porteuses: ", num)
     # afficher les résultats dans une fenêtre
     popup = tk.Toplevel()
+    place_relative(popup, root, 400, 200)
     popup.title(lang["ofdm_results"])
-    popup.geometry("400x200")
     tk.Label(popup, text=f"{lang['tu']} = {Tu:.6f} ms").pack()
     tk.Label(popup, text=f"{lang['tg']} = {Tg:.6f} ms").pack()
     tk.Label(popup, text=f"{lang['ts']} = {Ts:.6f} ms").pack()
@@ -1532,6 +1537,24 @@ def clear_cursors():
     # Redessine
     fig.canvas.draw()
 
+def place_relative(popup, parent, w=300, h=200):
+    popup.withdraw()  # cache avant de positionner
+    parent.update_idletasks()
+
+    # coordonnées de la fenetre principale
+    x = parent.winfo_rootx()
+    y = parent.winfo_rooty()
+    ph = parent.winfo_height()
+
+    # centre la popup sur la gauche de la fenetre principale
+    xpos = x
+    ypos = y + (ph - h) // 2
+
+    popup.geometry(f"{w}x{h}+{xpos}+{ypos}")
+    popup.transient(parent)
+    popup.deiconify()  # affiche la popup
+    popup.lift()
+
 # sauvegarde le signal (modifié ou non) en nouveau fichier wav
 def save_as_wav():
     global iq_wave, frame_rate
@@ -1578,8 +1601,9 @@ def demod_fsk():
             mapping_gray.config(state=tk.DISABLED)
             mapping_custom.config(state=tk.DISABLED)
     popup = tk.Toplevel()
+    popup.bind("<Return>", lambda event: popup.destroy())
+    place_relative(popup, root, 350, 250)
     popup.title(lang["demod_param"])
-    popup.geometry("350x250")
     param_order = tk.StringVar()
     param_order.set(lang["param_order"])
     tk.Radiobutton(popup, text=lang["param_order2"], variable=param_order, value=lang["param_order2"], command=toggle_mapping).pack()
@@ -1735,6 +1759,8 @@ def demod_mfsk():
     tau = np.pi
     # on demande rapidité, ordre, espacement et mapping    
     popup = tk.Toplevel()
+    popup.bind("<Return>", lambda event: popup.destroy())
+    place_relative(popup, root, 500, 250)
     popup.title(lang["demod_param"])
     # popup.geometry("350x250")
     param_method = tk.StringVar()
@@ -1864,8 +1890,9 @@ def apply_median_filter():
         return
     # Demande la taille du filtre. 4 options (Léger pour 3, Modéré pour 5, Agressif pour 9, sinon personnalisé) avec liste dans la fenêtre
     popup = tk.Toplevel()
+    popup.bind("<Return>", lambda event: popup.destroy())
+    place_relative(popup, root, 300, 150)
     popup.title(lang["median_filter"])
-    popup.geometry("300x150")
     tk.Label(popup, text=lang["kernel_select"]).pack()
     kernel_size = tk.StringVar()
     options = [lang["light_filter"], lang["medium_filter"], lang["aggressive_filter"], lang["dynamic_filter"], "Custom"]
@@ -1925,7 +1952,8 @@ def apply_moving_average():
     # Demande la taille du filtre. 4 options (Léger pour 3, Modéré pour 5, Agressif pour 9, sinon personnalisé) avec liste dans la fenêtre
     popup = tk.Toplevel()
     popup.title(lang["moving_average"])
-    popup.geometry("300x150")
+    popup.bind("<Return>", lambda event: popup.destroy())
+    place_relative(popup, root, 300, 150)
     tk.Label(popup, text=lang["window_size_select"]).pack()
     window_size = tk.StringVar()
     options = [lang["light_filter"], lang["medium_filter"], lang["aggressive_filter"], lang["dynamic_filter"], "Custom"]
@@ -2018,7 +2046,8 @@ def apply_matched_filter():
     # Popup pour sélectionner le filtre
     popup = tk.Toplevel()
     popup.title(lang["matched_filter"])
-    popup.geometry("300x150")
+    popup.bind("<Return>", lambda event: popup.destroy())
+    place_relative(popup, root, 300, 150)
     tk.Label(popup, text=lang["pulse_shape"]).pack()
     pulse_shape_var = tk.StringVar()
     options = ['rectangular', 'gaussian', 'raised_cosine', 'root_raised_cosine', 'sinc', 'rsinc']
@@ -2054,7 +2083,7 @@ def apply_matched_filter():
 
 def shift_frequency():
     global iq_wave, frame_rate
-    # décale la fréquence centrale de la moitié de fréquence d'échantillonnage : prend en compte les fichiers qui ne sont pas IQ mais réels
+    # décale la fréquence centrale de la moitié de fréquence d'échantillonnage : prend en compte les fichiers encodés "à l'envers"
     if not filepath:
         return
     iq_wave = iq_wave * ((-1) ** np.arange(len(iq_wave)))
@@ -2063,8 +2092,11 @@ def shift_frequency():
     plot_initial_graphs()
 
 def prepare_audio(sig):
-    if sig.ndim > 1:
+    if sig.ndim > 1: # stereo to mono
         sig = sig[:, 0]
+    max_val = np.max(np.abs(sig))
+    if max_val > 1: # normalisation
+        sig = sig / max_val
     return np.asarray(sig, dtype=np.float32)
 
 # Play/Pause
@@ -2101,7 +2133,7 @@ def play_audio():
     global audio_stream, stream_position, is_playing, is_paused, total_samples
 
     try:
-        prepared_audio = prepare_audio(iq_wave) # suppose demodulation deja faite
+        prepared_audio = prepare_audio(iq_wave) # suppose demodulation deja faite, on convertit en réel
         total_samples = len(prepared_audio)
 
         def audio_callback(outdata, frames, time, status):

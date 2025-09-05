@@ -90,7 +90,7 @@ def cyclic_spectrum_fft(iq_wave, frame_rate, alpha_list):
 def cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window, frame_len=512, step=256):
     """Cyclospectre avec FFT glissante"""
     window = df.get_window(window, frame_len)
-    alpha_list = np.linspace(-frame_rate/2, frame_rate/2, 1000)  # fréquences cycliques
+    alpha_list = np.linspace(-frame_rate/2, frame_rate/2, int(np.log(len(iq_wave))*1000))  # fréquences cycliques
     # Initialisation de l'accumulateur de corrélation cyclique
     cyclic_corr_accum = np.zeros(len(alpha_list))
     frame_count = 0
