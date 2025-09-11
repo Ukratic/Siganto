@@ -26,40 +26,26 @@ def conv_mp3(filepath):
     # Charge mp3 et conversion raw audio
     audio = AudioSegment.from_file(filepath, format="mp3")
     frame_rate = audio.frame_rate  # Fs
-    # Verif présence 1 ou 2 canaux
-    if audio.channels == 2:
-        print("Fichier mp3 en stereo")
-    elif audio.channels == 1:
-        print("Fichier mp3 en mono")
-        # Conversion en stereo
-        audio = audio.set_channels(2)
-        print("Conversion en stereo : peut générer des résultats incohérents, notamment des duplications de canaux.")
-    else:
-        print("Format non reconnu de mp3 autre que stereo/mono : ", audio.channels)
-        print("Conversion impossible. Vérifier le fichier mp3.")
-        return
-    # Extraction raw PCM
-    raw_data = np.array(audio.get_array_of_samples())
     # Determine bits par sample
     sample_width = audio.sample_width * 8  # Conversion en bits
     bit_depth_map = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
-    n_bits = bit_depth_map.get(sample_width, np.int32)
+    if sample_width not in bit_depth_map:
+        print(f"Encodage non supporté : {sample_width} bits")
+        return
     print(f"Bits par échantillon : {sample_width}")
     print(f"Fréquence d'échantillonnage : {frame_rate} Hz")
-    # Reshape avec split des canaux stereo (I/Q entrelacé)
-    iq_wave = np.frombuffer(raw_data, dtype=n_bits)
-    left, right = iq_wave[0::2], iq_wave[1::2]
+    # Extraction raw PCM & reshape avec split des canaux stereo (I/Q entrelacé)
+    samples = np.array(audio.get_array_of_samples(),dtype=bit_depth_map[sample_width])
+    samples = samples.reshape((-1, audio.channels))
+    if audio.channels == 2:
+        print("Fichier stereo : séparation des canaux I/Q")
+        left, right = samples[:,0], samples[:,1]
+    else:
+        print("Duplication du canal mono en stereo")
+        left, right = samples[:,0], samples[:,0]  # duplique mono
     # Combine canaux I (left) et Q (right) pour obtenir le signal IQ complexe
-    try:
-        iq_wave = left + 1j * right
-    except:
-        # retire quelques échantillons pour éviter les erreurs si nécessaire
-        iq_wave = left[:min(len(left), len(right))] + 1j * right[:min(len(left), len(right))]
-        print("Erreur de conversion. Quelques échantillons retirés pour matcher I & Q.")
-    print(f"Durée du signal : {len(iq_wave) / frame_rate} secondes")
-    # Vérifie si les canaux I/Q sont identiques
-    if np.array_equal(left[:10], right[:10]):
-        print("Les canaux I/Q sont identiques : probable artefact de conversion mono -> stereo.")
+    iq_wave = left + 1j * right
+    print(f"Durée du signal : {len(iq_wave) / frame_rate:.2f} secondes")
     # Normalisation
     max_amplitude = np.max(np.abs(iq_wave))
     if max_amplitude > 0:

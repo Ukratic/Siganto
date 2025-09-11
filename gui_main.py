@@ -116,15 +116,15 @@ def find_sample_width(file_path):
     with open(file_path,'rb') as wav_file:
         header = wav_file.read(44) # Premiers 44 bytes = réservés header
         if header[:4] != b'RIFF' or header[8:12] != b'WAVE' or header[12:16] != b'fmt ': # vérifie si c'est un fichier WAV
-            tk.messagebox.showerror(lang["error"], lang["invalid_wav"])
+            tk.messagebox.showerror(lang["error"], lang["invalid_wav"], parent=root)
             raise ValueError(lang["invalid_wav"])
         bits_per_sample  = struct.unpack('<H', header[34:36])[0]
         audio_format = struct.unpack('<H', header[20:22])[0]
         if bits_per_sample not in [8, 16, 24, 32, 64]:
-            tk.messagebox.showerror(lang["error"], lang["unsupported_bits"])
+            tk.messagebox.showerror(lang["error"], lang["unsupported_bits"], parent=root)
             raise ValueError(lang["unsupported_bits"])
         if audio_format not in [1, 3]:  # PCM ou IEEE float
-            tk.messagebox.showerror(lang["error"], lang["unsupported_format"])
+            tk.messagebox.showerror(lang["error"], lang["unsupported_format"], parent=root)
             raise ValueError(lang["unsupported_format"])
         audio_format = "PCM" if audio_format == 1 else "IEEE float"
     return bits_per_sample , audio_format
@@ -176,7 +176,7 @@ def load_wav():
     except:
         if debug is True:
             print("Erreur de conversion IQ")
-        tk.messagebox.showerror(lang["error"], lang["wav_conversion"])
+        tk.messagebox.showerror(lang["error"], lang["wav_conversion"], parent=root)
     if len(iq_wave) > 1e6: # si plus d'un million d'échantillons
         N = 4096
     elif 1e5 < len(iq_wave) < 1e6 :
@@ -265,7 +265,7 @@ def plot_initial_graphs():
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
-        tk.messagebox.showerror(lang["error"], lang["error_stft"])
+        tk.messagebox.showerror(lang["error"], lang["error_stft"], parent=root)
         return
     ax[0].imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0], cmap='jet')
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
@@ -548,7 +548,7 @@ def set_overlap():
     global overlap, overlap_value
     enter_overlap = tk.simpledialog.askstring(lang["params"], lang["overlap_val"], parent=root)
     if enter_overlap is None or enter_overlap == "" or int(enter_overlap) < 2:
-        tk.messagebox.showinfo(lang["error"], lang["overlap_valid"])
+        tk.messagebox.showinfo(lang["error"], lang["overlap_valid"], parent=root)
         overlap = N//overlap_value
         if debug is True:
             print("Pas de recouvrement valable défini pour la STFT. Recouvrement par défaut à ", overlap)
@@ -576,7 +576,7 @@ def stft_solo():
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
-        tk.messagebox.showerror(lang["error"], lang["error_stft"])
+        tk.messagebox.showerror(lang["error"], lang["error_stft"], parent=root)
         return
     ax.imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0],cmap=cm.jet)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
@@ -608,7 +608,7 @@ def display_frq_info():
     estim_speed = round(np.abs(em.power_spectrum_fft(iq_wave, frame_rate)[2]),2)
     _,_,_, peak_squared_freq, peak_quartic_freq = em.power_series(iq_wave, frame_rate)
     estim_speed_3 = [round(abs(peak_squared_freq),2),round(abs(peak_quartic_freq),2)]
-    _, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
+    _, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
     freq_diff /= np.max(np.abs(freq_diff))
     estim_speed_4 = round(float(dm.estimate_baud_rate(freq_diff, frame_rate)),2)
     acf_peak = round(np.abs(em.autocorrelation_peak(iq_wave, frame_rate, min_distance=25)[1]),2)
@@ -677,7 +677,7 @@ def move_frequency_cursors():
     # déplacement de la fréquence centrale sur le curseur (inactif si 2 curseurs)
     global cursor_points, iq_wave, frame_rate
     if len(cursor_points) != 1 and (cursor_points[0][0] != cursor_points[1][0]):
-        tk.messagebox.showinfo(lang["error"], lang["1pt_cursors"])
+        tk.messagebox.showinfo(lang["error"], lang["1pt_cursors"], parent=root)
         return
     fcenter = cursor_points[0][0]
     iq_wave = iq_wave * np.exp(-1j*2*np.pi*fcenter*np.arange(len(iq_wave))/frame_rate)
@@ -729,7 +729,7 @@ def apply_filter_band():
     tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.wait_window()
     if (lowcut.get() == "" and highcut.get() != "") or (lowcut.get() != "" and highcut.get() == ""):
-        tk.messagebox.showinfo(lang["error"], lang["freq_valid"])
+        tk.messagebox.showinfo(lang["error"], lang["freq_valid"], parent=root)
         return
     elif lowcut.get() == "" and highcut.get() == "":
         return
@@ -820,7 +820,7 @@ def cut_signal():
     tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.wait_window()
     if start.get() =="" and end.get() =="":
-        # tk.messagebox.showinfo(lang["error"], lang["valid_cut"])
+        # tk.messagebox.showinfo(lang["error"], lang["valid_cut"], parent=root)
         return
     if start.get() =="":
         start = 0
@@ -841,7 +841,7 @@ def cut_signal_cursors():
     # coupure du signal entre les 2 curseurs (ne prend en compte que la durée, pas l'écart en fréquence)
     global iq_wave, frame_rate, cursor_points
     if len(cursor_points) < 2:
-        tk.messagebox.showinfo(lang["error"], lang["2pt_cursors"])
+        tk.messagebox.showinfo(lang["error"], lang["2pt_cursors"], parent=root)
         return
     # signal coupé entre les 2 points. On ne sait pas quel point est le début et lequel est la fin, donc on prend les valeurs y les plus petites et les plus grandes
     start = int(cursor_points[0][1]*frame_rate)
@@ -1127,7 +1127,7 @@ def autocorr_full():
     if not filepath:
         print(lang["no_file"])
         return
-    if not tk.messagebox.askokcancel(lang["autocorr_full"], lang["confirm_wait"]):
+    if not tk.messagebox.askokcancel(lang["autocorr_full"], lang["confirm_wait"], parent=root):
         return
     ax = plt.subplot()
     # Params cyclospectre
@@ -1156,7 +1156,7 @@ def phase_difference():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    time, phase_diff = em.phase_time_angle(iq_wave, frame_rate, diff_window)
+    time, phase_diff = em.phase_time_angle(iq_wave, frame_rate, diff_window, window_choice)
     ax.plot(time, phase_diff)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel(f"{lang['diff_phase']} [rad]")
@@ -1180,7 +1180,7 @@ def freq_difference():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
+    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
     ax.plot(time, freq_diff)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel(f"{lang['freq_xy']} [Hz]") 
@@ -1273,6 +1273,37 @@ def set_diff_params():
     diff_window = int(diff_window)
     if debug is True:
         print("Fenêtre de lissage des transitions définie à ", diff_window)
+
+def morlet_wavelet():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["morlet_cwt"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    if not tk.messagebox.askokcancel(lang["morlet_cwt"], lang["confirm_wait"], parent=root):
+        return
+    if debug is True:
+        print("Génération de la transformée en ondelettes de Morlet")
+        print("Peut générer des ralentissements. Patienter")
+    ax = plt.subplot()
+    coefs, center_freqs = df.morlet_cwt(iq_wave, fs=frame_rate)
+    times = np.arange(coefs.shape[1]) / frame_rate
+    power = np.abs(coefs)
+    im = ax.imshow(power, extent=[times[0], times[-1], center_freqs[0], center_freqs[-1]], aspect='auto', cmap='jet', origin='lower')
+    ax.set_xlabel(f"{lang['time_xy']} [s]")
+    ax.set_ylabel("Morlet  freq [π rad/sample]")
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label("Magnitude")
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del coefs, center_freqs, times, canvas
+
 
 # OFDM
 def alpha_from_symbol():
@@ -1580,7 +1611,7 @@ def save_as_wav():
 def demod_fsk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     # transitions de frq
-    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
+    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
     freq_diff /= np.max(np.abs(freq_diff))
     # vars pour fonctions de démod
     target_rate = None
@@ -1748,7 +1779,7 @@ def demod_am():
 # EXPERIMENTAL
 def demod_mfsk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window)
+    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
     freq_diff /= np.max(np.abs(freq_diff))
     # vars pour fonctions de démod
     target_rate = None
@@ -1917,7 +1948,7 @@ def apply_median_filter():
             kernel_size = int(frame_rate / (symbol_rate * 2)) | 1
         else:
             # Si l'utilisateur a choisi une option non reconnue, on affiche un message d'erreur
-            tk.messagebox.showerror(lang["error"], lang["kernel_invalid"])
+            tk.messagebox.showerror(lang["error"], lang["kernel_invalid"], parent=root)
             if debug is True:
                 print("Taille du noyau invalide sélectionnée.")
             return
@@ -1978,7 +2009,7 @@ def apply_moving_average():
             window_size = int(frame_rate / (symbol_rate)) | 1
         else:
             # Si l'utilisateur a choisi une option non reconnue, on affiche un message d'erreur
-            tk.messagebox.showerror(lang["error"], lang["window_invalid"])
+            tk.messagebox.showerror(lang["error"], lang["window_invalid"], parent=root)
             if debug is True:
                 print("Taille de fenêtre invalide sélectionnée.")
             return
@@ -2074,12 +2105,69 @@ def apply_matched_filter():
         if debug:
             print(f"Filtre adapté appliqué: {pulse_shape}, facteur={factor}, rapidité={symbol_rate}")
     except Exception as e:
-        tk.messagebox.showerror(lang["error"], f"{lang["error_matched_filter"]}: {e}")
+        tk.messagebox.showerror(lang["error"], f"{lang["error_matched_filter"]}: {e}", parent=root)
         if debug:
             print(f"Erreur lors de l'application du filtre adapté : {e}")
-    
     plot_initial_graphs()
 
+def eye_diagram():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # Demande la rapidité de modulation
+    baud_rate = tk.simpledialog.askfloat(lang["eye_diagram"], lang["demod_speed"], parent=root)
+    if baud_rate is None or baud_rate < 0:
+        if debug is True:
+            print("Rapidité de modulation non définie ou invalide.")
+        return
+    elif baud_rate == 0:
+        print("Pas de rapidité de modulation définie. Essai aveugle")
+        symbol_rate = None
+    try:
+        freq_diff = em.frequency_transitions(iq_wave, frame_rate, window_size=diff_window, window_type=window_choice)[1]
+        symbol_rate = dm.estimate_baud_rate(freq_diff, frame_rate, target_rate=baud_rate, precision=0.9, debug=debug)
+        if symbol_rate is None or symbol_rate <= 0:
+            symbol_rate = baud_rate
+        if debug is True:
+            print(f"Rapidité estimée pour diagramme de l'oeil: {symbol_rate} bauds")
+        channel = "I" # pour l'instant, on ne fait que le canal I
+        time, traces, metrics = dm.eye_diagram_with_metrics(iq_wave, fs=frame_rate, baud_rate=symbol_rate, channel=channel, num_traces=500)
+        if debug is True:
+            print("Diagramme de l'oeil calculé")
+            print("Metriques: ", metrics)
+        # plot
+        clear_plot()
+        fig = plt.figure()
+        fig.suptitle(f"{lang['eye_diagram']}. \n{lang['channel']} {channel}, {lang['symbol_rate']} : {symbol_rate}")
+        ax = plt.subplot()
+        for trace in traces:
+            ax.plot(time, trace, color='blue', alpha=0.18)
+        ax.set_xlabel(lang["bits_value"])
+        ax.set_ylabel("Amplitude")
+        ax.grid(True, alpha=0.25)
+        # annotation des métriques
+        textstr = (
+            f"{lang['eye_height']} : {metrics['eye_height']}\n"
+            f"{lang['eye_width']} : {metrics['eye_width']} {lang['bits_value']}\n"
+            f"{lang['eye_opening_ratio']} : {metrics['eye_opening_ratio']}"
+        )
+        fig.text(0.02, 0.02, textstr, ha="left", va="bottom", fontsize=9, bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+    except Exception as e:
+        clear_plot()
+        time, traces, metrics = None, None, None
+        fig = plt.figure()
+        fig.suptitle(lang["eye_fail"])
+        ax = plt.subplot()
+        ax.plot(0)
+        if debug is True:
+            print(f"Echec du diagramme de l'oeil: {e}")
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del canvas, traces, time, metrics
 
 def shift_frequency():
     global iq_wave, frame_rate
@@ -2304,10 +2392,12 @@ def load_lang_changes():
     diff_menu.add_command(label=lang["phase_spectrum"], command=phase_spectrum)
     diff_menu.add_command(label=lang["distrib_phase"], command=phase_cumulative)
     diff_menu.add_command(label=lang["diff_phase"], command=phase_difference)
+    diff_menu.add_command(label=lang["eye_diagram"], command=eye_diagram)
     # Frequence
     freq_menu.add_command(label=lang["diff_freq"], command=freq_difference)
     freq_menu.add_command(label=lang["distrib_freq"], command=frequency_cumulative)
     freq_menu.add_command(label=lang["persist_spectrum"], command=spectre_persistance)
+    freq_menu.add_command(label=lang["scalogram"], command=morlet_wavelet)
     # ACF
     acf_menu.add_command(label=lang["autocorr"], command=autocorr)
     acf_menu.add_command(label=lang["autocorr_full"], command=autocorr_full)

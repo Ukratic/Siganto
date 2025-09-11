@@ -1,6 +1,6 @@
 """Fonctions DSP annexes"""
 import numpy as np
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, fftconvolve
 
 # Flattop window
 def flattop_window(N):
@@ -110,3 +110,46 @@ def get_window(window_type, N):
         return gaussian_window(N)
     else:
         raise ValueError(f"Type de fenêtre inconnu : {window_type}")    
+    
+def morlet_wavelet(t, s, w=6.0):
+    """ Génère une ondelette Morlet dans le domaine temporel.
+    t : tableau de temps centré à 0
+    s : échelle
+    w : paramètre de fréquence centrale de Morlet"""
+    wave = np.exp(1j * w * t / s) * np.exp(-0.5 * (t / s)**2)
+    wave /= np.sqrt(np.sum(np.abs(wave)**2))  # normalisation de l'énergie
+    return wave
+
+def morlet_cwt(iq_wave, fs, fmin=None, fmax=None, nfreq=96, w=6.0):
+    """ CWT Morlet avec convolution linéaire basée sur FFT.
+    coefs : coefficients complexes (nfreq x len(iq_wave))
+    center_freqs : fréquences centrales de Morlet en pi rad/échantillon
+    """
+
+    x = np.asarray(iq_wave)
+    N = len(x)
+    dt = 1.0 / fs
+
+    if fmin is None:
+        fmin = fs / N      # résolution en fréquence
+    if fmax is None:
+        fmax = fs / 2.0    # Nyquist
+
+    # Calcul des échelles
+    freqs = np.geomspace(fmin, fmax, nfreq)
+    scales = w / (2 * np.pi * freqs * dt)
+
+    coefs = []
+    for s in scales:
+        M = int(np.ceil(12 * s))
+        t = np.arange(-M//2, M//2 + 1)
+        wave = morlet_wavelet(t, s, w)
+        C = fftconvolve(x, wave, mode='same')
+        C /= np.sqrt(s)  # normalisation par l'échelle
+        coefs.append(C)
+
+    coefs = np.vstack(coefs)
+    center_freqs = w / scales  # radians/échantillon
+    center_freqs_pi = center_freqs / np.pi # en pi rad/sample pour cohérence avec d'autres outils
+
+    return coefs, center_freqs_pi

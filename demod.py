@@ -1,13 +1,10 @@
-"""Basé sur les fonctions de Michael Ossmann, "clock recovery experiments" : https://github.com/mossmann/clock-recovery
-Avec quelques modifications et ajouts pour compléter les cas d'usage"""
+"""Fonctions de démodulation et/ou d'estimation du débit symbole. 
+WPCR pour demod NRZ basée sur les fonctions de Michael Ossmann, "clock recovery experiments" : https://github.com/mossmann/clock-recovery"""
 import numpy as np
 import scipy.signal as signal
 import string
 
-# Commentaires et code de Michael laissés bruts pour mieux repérer les modifications
 
-# input: magnitude spectrum of clock signal (np array)
-# output: FFT bin number of clock frequency
 def find_clock_frequency(spectrum, sample_rate, target_rate=None, precision=0.9):
     """Détermine la fréquence d'horloge"""
     maxima = signal.argrelextrema(spectrum, np.greater_equal)[0]
@@ -22,16 +19,16 @@ def find_clock_frequency(spectrum, sample_rate, target_rate=None, precision=0.9)
     else:
         min_rate, max_rate = None, None
 
-    # Convert min/max symbol rate to FFT bin range
+    # Convertit les fréquences min/max en bins FFT
     nfft = len(spectrum)
     min_bin = int((min_rate / sample_rate) * nfft) if min_rate else 2
     max_bin = int((max_rate / sample_rate) * nfft) if max_rate else nfft // 2
 
-    # Filter out peaks outside the expected range
+    # Filtre les maxima en dehors des bornes
     maxima = maxima[(maxima >= min_bin) & (maxima <= max_bin)]
 
     if maxima.size == 0:
-        return 0  # No valid frequency found
+        return 0  # pas de pic dans la plage
 
     threshold = max(spectrum[2:-1]) * 0.8
     indices_above_threshold = np.argwhere(spectrum[maxima] > threshold)
@@ -48,10 +45,6 @@ def midpoint(a):
     return (high + low) / 2
 
 # whole packet clock recovery
-# input: real valued NRZ-like waveform (array, tuple, or list)
-#        must have at least 2 samples per symbol
-#        must have at least 2 symbol transitions
-# output: list of symbols
 def wpcr(a, sample_rate, target_rate, tau, precision, debug):
     """Fonction principale de la méthode de démodulation"""
     if len(a) < 4:
@@ -89,7 +82,7 @@ def estimate_baud_rate(a, sample_rate, target_rate=None, precision=0.9, debug=Fa
     """Estimation de rapidité de modulation"""
     if len(a) < 4:
         return 0
-    # binarize
+    # seuil
     b = (a > midpoint(a)) * 1.0
     d = np.diff(b) ** 2
     if len(np.argwhere(d > 0)) < 2:
@@ -106,7 +99,7 @@ def estimate_baud_rate(a, sample_rate, target_rate=None, precision=0.9, debug=Fa
         print("estimated baud rate: %f symbols/s" % baud_rate)
     return baud_rate[0]
 
-# convert soft symbols into bits (assuming binary symbols)
+# Fonctions de slicing : binaire, 4-FSK, MFSK. Soft -> bits.
 def slice_binary(symbols):
     """Convertit les symboles en bits 0 et 1"""
     symbols_average = np.average(symbols)
@@ -123,16 +116,16 @@ def slice_4fsk(symbols,mapping):
     # 2 mappings, sinon custom
     mappings = {
         "natural": {
-            0: (0, 0),  # Lowest freq
+            0: (0, 0),  # Frequence la plus basse
             1: (0, 1),
             2: (1, 0),
-            3: (1, 1)   # Highest freq
+            3: (1, 1)   # Frequence la plus haute
         },
         "gray": {
-            0: (0, 0),  # Lowest freq
+            0: (0, 0),  # Frequence la plus basse
             1: (0, 1),
             2: (1, 1),
-            3: (1, 0)   # Highest freq
+            3: (1, 0)   # Frequence la plus haute
         }
     }
     # Vérification du mapping
@@ -218,8 +211,7 @@ def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
     bits = np.array([b for idx in indices for b in bit_map[idx]], dtype=np.uint8)
     return bits
 
-# Emprunté : à tester
-# EXPERIMENTAL
+
 def _parabolic_interpol(mag, k):
     # Parabolic peak interpolation around bin k (on linear power or magnitude)
     # Returns fractional bin offset delta in [-0.5, 0.5] roughly
@@ -392,3 +384,90 @@ def detect_and_track_mfsk_auto(
         measured_rate = 0.0
 
     return tone_freqs, times, tone_idx, tone_trace, tone_pows, measured_rate
+
+def eye_diagram_with_metrics(samples, fs, baud_rate, channel="I", num_traces=500, symbols_per_trace=2):
+    """Trace un diagramme de l'oeil avec métriques associées"""
+    # Sélection du canal
+    if np.iscomplexobj(samples):
+        ch = channel.upper()
+        if ch == "I":
+            sig = samples.real
+        elif ch == "Q":
+            sig = samples.imag
+        elif ch == "MAG":
+            sig = np.abs(samples)
+        else:
+            raise ValueError("channel must be 'I', 'Q', or 'mag'")
+    else:
+        sig = np.asarray(samples)
+
+    # Estimation du nombre de points par symbole
+    sps = fs / float(baud_rate)
+    n_points = int(max(2, round(symbols_per_trace * sps)))
+    time = np.linspace(0, symbols_per_trace, n_points, endpoint=False)
+
+    # Détermine le nombre de traces à extraire
+    sig_len = len(sig)
+    required_samples = symbols_per_trace * sps
+    max_possible_traces = int(np.floor((sig_len - required_samples) / sps)) + 1
+    num_traces = max(0, min(int(num_traces), max_possible_traces))
+
+    # Extraction des segments avec interpolation
+    traces = []
+    idx = 0.0
+    for _ in range(num_traces):
+        start = idx
+        stop = idx + required_samples
+        if stop > sig_len - 1e-9:
+            break
+        xp = np.linspace(start, stop, n_points, endpoint=False)
+        segment = np.interp(xp, np.arange(sig_len), sig)
+        traces.append(segment)
+        idx += sps
+
+    metrics = {"eye_height": None, "eye_width": None, "eye_opening_ratio": None}
+
+    if len(traces) == 0:
+        return np.empty((0, n_points)), metrics
+
+    traces = np.array(traces)
+
+    # Métriques
+    # Hauteur de l'oeil au milieu du symbole
+    mid_idx = int(round(0.5 * sps))
+    mid_idx = np.clip(mid_idx, 0, n_points - 1)
+    mids = traces[:, mid_idx]
+    low = np.percentile(mids, 25)
+    high = np.percentile(mids, 75)
+    eye_height = float(high - low)
+    metrics["eye_height"] = eye_height
+
+    # Largeur de l'oeil : moyenne des largeurs à mi-hauteur
+    threshold = 0.5 * (np.max(traces) + np.min(traces))
+    widths = []
+    for seg in traces:
+        above = seg > threshold
+        diff = np.diff(above.astype(int))
+        cross_points = np.where(diff != 0)[0]
+        if cross_points.size >= 2:
+            # complet, prend la distance entre le premier et le dernier
+            width_symbols = (cross_points[-1] - cross_points[0]) * (symbols_per_trace / n_points)
+            widths.append(width_symbols)
+        elif cross_points.size == 1:
+            # partiel, prend la distance entre le point de croisement et le bord le plus proche
+            width_symbols = cross_points[0] * (symbols_per_trace / n_points)
+            widths.append(width_symbols)
+        else:
+            # pas de croisement (durée complète ou nulle)
+            widths.append(symbols_per_trace)
+    eye_width = float(np.mean(widths)) if widths else None
+    metrics["eye_width"] = eye_width
+
+    # Ratio d'ouverture de l'oeil
+    sig_min = np.min(traces)
+    sig_max = np.max(traces)
+    sig_range = sig_max - sig_min
+    eye_opening_ratio = (eye_height / sig_range) if (sig_range > 0) else None
+    metrics["eye_opening_ratio"] = float(eye_opening_ratio) if eye_opening_ratio is not None else None
+
+    return time, traces, metrics
