@@ -1,9 +1,9 @@
 ## SigAnTo
 
-A lightweight signal analysis GUI toolbox.<br>
+Signal Analysis Toolbox : a free & open-source digital signal analyzer.<br>
 
-Its purpose is to read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs, measurements and modifications.
-Real-time applications and dealing with incoming streams are outside the scope of this tool.<br>
+Read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs, measurements and modifications.
+Real-time applications such as dealing with incoming streams are outside the scope of this tool.<br>
 Some of the identification is automated (see some examples with screenshots below) but should always be confirmed manually.<br>
 
 SigAnTo supports mostly analysis for now, with manual fine-tuning and 2 & 4-FSK demodulation. More to come later.<br>
@@ -115,6 +115,7 @@ Overlap.
 *Planned for later :*<br>
 -- PSK demodulation.<br>
 -- Cursor selection improvement.<br>
+-- More parameters available in GUI.<br>
 
 
 ### Using the app
