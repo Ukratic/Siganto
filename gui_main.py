@@ -1607,18 +1607,16 @@ def save_as_wav():
     if debug is True:
         print("Ecriture du nouveau wav")
 
-# Démodulation FSK 2 et 4
-def demod_fsk():
+# Démodulation FSK(CPM NRZ)/PSK 2 et 4
+def demod_cpm_psk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    # transitions de frq
-    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
-    freq_diff /= np.max(np.abs(freq_diff))
     # vars pour fonctions de démod
     target_rate = None
     precision = 0.9
     order = None
     mapping = None
     tau = np.pi * 2
+    mod_type = None
     # on demande rapidité, ordre et mapping
     def toggle_mapping():
         # mapping seulement si ordre 4
@@ -1633,10 +1631,16 @@ def demod_fsk():
             mapping_custom.config(state=tk.DISABLED)
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
-    place_relative(popup, root, 350, 250)
+    place_relative(popup, root, 350, 300)
     popup.title(lang["demod_param"])
+    modulation_type = tk.StringVar()
+    tk.Label(popup, text=lang["demod_type"]).pack()
+    tk.Radiobutton(popup, text=lang["demod_fsk"], variable=modulation_type, value=lang["demod_fsk"]).pack()
+    tk.Radiobutton(popup, text=lang["demod_psk"], variable=modulation_type, value=lang["demod_psk"]).pack()
+    modulation_type.set(lang["demod_fsk"])
+
     param_order = tk.StringVar()
-    param_order.set(lang["param_order"])
+    tk.Label(popup, text=lang["param_order"]).pack()
     tk.Radiobutton(popup, text=lang["param_order2"], variable=param_order, value=lang["param_order2"], command=toggle_mapping).pack()
     tk.Radiobutton(popup, text=lang["param_order4"], variable=param_order, value=lang["param_order4"], command=toggle_mapping).pack()
     param_order.set(lang["param_order2"])
@@ -1651,9 +1655,22 @@ def demod_fsk():
     mapping_gray.pack()
     mapping_custom = tk.Radiobutton(popup, text=lang["mapping_custom"], variable=param_mapping, value=lang["mapping_custom"], state=tk.DISABLED)
     mapping_custom.pack()
-    tk.Button(popup, text="OK", command=popup.destroy).pack()
-    
+    tk.Button(popup, text="OK", command=popup.destroy).pack()    
     popup.wait_window()
+    
+    if modulation_type.get() == lang["demod_psk"]:
+        time, diff = em.phase_time_angle(iq_wave, frame_rate, diff_window, window_choice)
+        diff /= np.max(np.abs(diff))
+        mod_type = "PSK"
+        if debug is True:
+            print("Démodulation PSK sélectionnée")
+    else:
+        time, diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
+        diff /= np.max(np.abs(diff))
+        mod_type = "CPM/FSK"
+        if debug is True:
+            print("Démodulation FSK sélectionnée")
+
     if target_rate.get() == "":
         if debug is True:
             print("Rapidité de démodulation non définie.")
@@ -1678,15 +1695,15 @@ def demod_fsk():
 
     # fonction de démod et slice bits en fonction de l'ordre
     try:
-        symbols, clock = dm.wpcr(freq_diff, frame_rate, target_rate, tau, precision, debug)
+        symbols, clock = dm.wpcr(diff, frame_rate, target_rate, tau, precision, debug)
         if len(symbols) > 2 and order == 2:
             bits=dm.slice_binary(symbols)
             if debug is True:
                 print("Démodulation FSK 2 réalisée, bits: ", len(bits))
         elif len(symbols) > 2 and order == 4:
-            bits = dm.slice_4fsk(symbols,mapping)
+            bits = dm.slice_4ary(symbols,mapping)
             if debug is True :
-                print(f"Démodulation FSK {order} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}") 
+                print(f"Démodulation {mod_type} {order} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}") 
         else:
             bits=0
         # plot des bits demodulés
@@ -1733,7 +1750,7 @@ def demod_fsk():
         text_output = lang["bits_fail"]
     text_box.insert(tk.END, text_output)
     text_box.config(state=tk.DISABLED)
-    del canvas, time, freq_diff, bits, bits_plot, formatted_bits, text_output, text_box
+    del canvas, time, diff, bits, bits_plot, formatted_bits, text_output, text_box
 
 def demod_fm():
     global iq_wave
@@ -1767,15 +1784,6 @@ def demod_am():
             return
     plot_other_graphs()
 
-# def demod_psk():
-#     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-#     # vars & input
-#     # mapping
-#     # popups
-#     # demod func
-#     # graphe & bits output
-#     #
-
 # EXPERIMENTAL
 def demod_mfsk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
@@ -1797,7 +1805,7 @@ def demod_mfsk():
     param_method = tk.StringVar()
     tk.Radiobutton(popup, text=lang["mfsk_discrete_diff"], variable=param_method, value="main").pack()
     tk.Radiobutton(popup, text=lang["mfsk_tone_detection"], variable=param_method, value="alt").pack()
-    param_method.set("main")
+    param_method.set("alt")
     param_order = tk.StringVar()
     tk.Label(popup, text=lang["param_order"]).pack()
     tk.Entry(popup, textvariable=param_order).pack()
@@ -2405,11 +2413,10 @@ def load_lang_changes():
     ofdm_menu.add_command(label=lang["ofdm_symbol"], command=alpha_from_symbol)
     ofdm_menu.add_command(label=lang["ofdm_results"], command=ofdm_results)
     # Demod
-    demod_menu.add_command(label=lang["demod_fsk"], command=demod_fsk)
+    demod_menu.add_command(label=lang["demod_cpm_psk"], command=demod_cpm_psk)
     demod_menu.add_command(label=lang["demod_fm"], command=demod_fm)
     demod_menu.add_command(label=lang["demod_am"], command=demod_am)
     demod_menu.add_command(label=lang["demod_mfsk"], command=demod_mfsk)
-    # demod_menu.add_command(label=lang["demod_psk"], command=demod_psk)
     # Audio
     if with_sound:
         audio_menu.add_command(label=lang["audio"], command=audio_output)

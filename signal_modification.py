@@ -116,25 +116,42 @@ def matched_filter(iq_wave, frame_rate, symbol_rate, factor=0.5, pulse_shape='re
         t = np.arange(-3*sps, 3*sps+1)
         alpha = np.sqrt(np.log(2)) / (BT * sps)
         kernel = np.exp(-0.5 * (alpha * t)**2)
-    elif pulse_shape in ('raised_cosine', 'root_raised_cosine'):
+    elif pulse_shape == 'raised_cosine':
         # RC ou RRC
         beta = factor
         span = 6  # nombre de symboles
-        t = np.arange(-span*sps, span*sps+1) / sps
+        t = np.arange(-span*sps, span*sps+1, dtype=float) / sps
         kernel = np.sinc(t)
-        kernel *= np.cos(np.pi*beta*t) / (1 - (2*beta*t)**2 + 1e-12)  # RC formula
-        if pulse_shape == 'root_raised_cosine':
-            kernel = np.sqrt(np.abs(kernel))
+        kernel *= np.cos(np.pi*beta*t) / (1 - (2*beta*t)**2 + 1e-12)  # formule RC
+    elif pulse_shape == 'root_raised_cosine':
+        beta = factor
+        span = 6
+        t = np.arange(-span*sps, span*sps+1, dtype=float) / sps
+        numerator = (np.sin(np.pi*t*(1-beta)) +
+                     4*beta*t*np.cos(np.pi*t*(1+beta)))
+        denominator = (np.pi*t*(1-(4*beta*t)**2))
+        # évite la division par zéro
+        mask = ~np.isclose(denominator, 0.0)
+        kernel = np.zeros_like(t)
+        kernel[mask] = numerator[mask] / denominator[mask]
+
+        # Gestion des singularités
+        kernel[np.isclose(t, 0.0)] = 1.0 - beta + 4*beta/np.pi
+        kernel[np.isclose(np.abs(t), 1/(4*beta))] = (beta/np.sqrt(2)) * (
+            ((1+2/np.pi)*np.sin(np.pi/(4*beta))) +
+            ((1-2/np.pi)*np.cos(np.pi/(4*beta))))
     elif pulse_shape in ('sinc', 'rsinc'):
         span = 6
-        t = np.arange(-span*sps, span*sps+1) / sps
+        t = np.arange(-span*sps, span*sps+1, dtype=float) / sps
         kernel = np.sinc(t)
         if pulse_shape == 'rsinc':
-            kernel = np.sqrt(kernel)
+            kernel = np.sqrt(np.clip(kernel, 0, None))  # évite sqrt sur valeurs négatives
     else:
         raise ValueError("Le filtre de mise en forme doit être 'rectangular', 'gaussian', 'raised_cosine', 'root_raised_cosine' ou 'sinc'.")
-    # Normalisation du noyau pour éviter l'amplification du signal
-    kernel /= np.sum(kernel)
+    # Inversion du noyau pour le filtrage adapté
+    kernel = np.conjugate(kernel[::-1])
+    # Normalisation du noyau
+    kernel /= np.sqrt(np.sum(np.abs(kernel)**2))
     # Application du filtre adapté
     filtered_signal = convolve(iq_wave, kernel, mode='same')
     return filtered_signal

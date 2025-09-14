@@ -143,7 +143,7 @@ def get_fra_lib():
         "not_apply" : "Pas de moyennage",
         "wav_load" : "Chargement du wav",
         "demod" : "Démodulation",
-        "demod_fsk" : "Démodulation FSK",
+        "demod_fsk" : "Démodulation CPM/FSK NRZ",
         "demod_psk" : "Démodulation PSK",
         "hist_bins": "Nombre de bins pour les distributions phase/fréquence (par défaut 1000) :",
         "param_hist_bins" : "Paramètres des distributions phase & fréquence",
@@ -206,8 +206,8 @@ def get_fra_lib():
         "estim_speed_4": "Estimation de rapidité de modulation par recherche de fréquence horloge :",
         "mono_real" : "Mono : Réel",
         "mono_iq" : "Mono : IQ",
-        "mfsk_discrete_diff" : "Basée sur les différences discrètes dans le temps (pré-filtrage et lissage nécessaire)",
-        "mfsk_tone_detection" : "Basée sur la détection des pics dans la STFT (Goertzel - Viterbi)",
+        "mfsk_discrete_diff" : "Basée sur les transitions de fréquences (méthode NRZ, lissage nécessaire)",
+        "mfsk_tone_detection" : "Basée sur la détection des tons (Goertzel - Viterbi)",
         "eye_height": "Hauteur de l'oeil",
         "eye_width": "Largeur de l'oeil",
         "eye_opening_ratio": "Ratio d'ouverture de l'oeil",
@@ -217,6 +217,8 @@ def get_fra_lib():
         "channel": "Canal",
         "morlet_cwt": "Transformée en ondelettes continues Morlet",
         "scalogram": "Scalogramme (CWT Morlet)",
+        "demod_cpm_psk": "Démodulation CPM/FSK & PSK",
+        "demod_type": "Sélectionner le type de modulation",
 
     }
     return fra_lib
@@ -364,7 +366,7 @@ def get_eng_lib():
         "not_apply" : "No averaging",
         "wav_load" : "Wav loading",
         "demod" : "Demodulation",
-        "demod_fsk" : "FSK Demodulation",
+        "demod_fsk" : "CPM/FSK NRZ Demodulation",
         "demod_psk" : "PSK Demodulation",
         "hist_bins": "Number of bins for the phase/frequency distributions (default 1000) :",
         "param_hist_bins": "Phase and Frequency Distribution Parameters",
@@ -427,8 +429,8 @@ def get_eng_lib():
         "estim_speed_4": "Symbol rate estimation with clock frequency detection : ",
         "mono_real" : "Mono : Real",
         "mono_iq" : "Mono : IQ",
-        "mfsk_discrete_diff" : "Based on discrete differences over time (pre-filtering & smoothing may be necessary)",
-        "mfsk_tone_detection" : "Based on tone detection in the STFT (Goertzel - Viterbi)",
+        "mfsk_discrete_diff" : "Based on frequency transitions (NRZ method, smoothing necessary)",
+        "mfsk_tone_detection" : "Based on tone detection (Goertzel - Viterbi)",
         "eye_height": "Eye Height",
         "eye_width": "Eye Width",
         "eye_opening_ratio": "Eye Opening Ratio",
@@ -438,6 +440,8 @@ def get_eng_lib():
         "channel": "Channel",
         "morlet_cwt": "Morlet Continuous Wavelet Transform",
         "scalogram": "Scalogram (Morlet CWT)",
+        "demod_cpm_psk": "CPM/FSK & PSK Demodulation",
+        "demod_type": "Select modulation type",
 
     }
     return eng_lib

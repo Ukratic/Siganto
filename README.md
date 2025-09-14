@@ -57,9 +57,9 @@ Overlap.
 #### 9. OFDM Metrics
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
 #### 10. Demodulation
-- 2 & 4 FSK Demodulation (outputs a stream of bits and graph of transitions)
+- 2 or 4 CPM/FSK & PSK Demodulation (outputs a stream of bits and graph of transitions)
 - AM & FM Demodulation (visual output and result signal saved for playback or further analysis)
-- MFSK Demodulation (2 methods available, output similar to FSK demod)
+- MFSK Demodulation (2 methods : tone detection or from smoothed frequency transitions)
 #### 11. Audio
 - Audio playback (when listening to an amplitude modulated signal for instance, you may need to use the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded)
 
@@ -111,9 +111,9 @@ Overlap.
 -- Drag & drop files instead of opening a file dialog (optional feature adding the tkinterdnd2 library as a dependency).<br>
 -- Eye Diagram added to Phase Metrics.<br>
 -- Morlet CWT Scalogram added to Frequency Metrics.<br>
+-- 2 & 4 PSK demodulation.<br>
 
 *Planned for later :*<br>
--- PSK demodulation.<br>
 -- Cursor selection improvement.<br>
 -- More parameters available in GUI.<br>
 

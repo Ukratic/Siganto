@@ -33,7 +33,7 @@ def find_clock_frequency(spectrum, sample_rate, target_rate=None, precision=0.9)
     threshold = max(spectrum[2:-1]) * 0.8
     indices_above_threshold = np.argwhere(spectrum[maxima] > threshold)
 
-    return maxima[indices_above_threshold[0]] if indices_above_threshold.size > 0 else 0
+    return int(maxima[indices_above_threshold[0]]) if indices_above_threshold.size > 0 else 0
 
 def midpoint(a):
     """Fonction pour déterminer le milieu de segment"""
@@ -97,7 +97,7 @@ def estimate_baud_rate(a, sample_rate, target_rate=None, precision=0.9, debug=Fa
     if debug:
         print("peak frequency index: %d / %d" % (p, len(f)))
         print("estimated baud rate: %f symbols/s" % baud_rate)
-    return baud_rate[0]
+    return baud_rate
 
 # Fonctions de slicing : binaire, 4-FSK, MFSK. Soft -> bits.
 def slice_binary(symbols):
@@ -106,7 +106,7 @@ def slice_binary(symbols):
     bits = symbols >= symbols_average
     return np.array(bits, dtype=np.uint8)
 
-def slice_4fsk(symbols,mapping):
+def slice_4ary(symbols,mapping):
     """Convertit les symboles en bits doubles (00 à 11)"""
     # chaque symbole = 2 bits
     if len(symbols) == 0:
