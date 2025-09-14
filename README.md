@@ -116,6 +116,7 @@ Overlap.
 *Planned for later :*<br>
 -- Cursor selection improvement.<br>
 -- More parameters available in GUI.<br>
+-- More demodulation options (differential, offset...).<br>
 
 
 ### Using the app

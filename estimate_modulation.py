@@ -149,10 +149,12 @@ def persistance_spectrum(iq_wave, frame_rate, N, power_bins=50):
     return f, min_power, max_power, persistence
 
 # Visualiser la phase dans le domaine temporel
-def phase_time_angle(iq_wave, frame_rate, window_size=5, window_type='rectangular'):
+def phase_time_angle(iq_wave, frame_rate, window_size=5, window_type='rectangular', unwrap=False):
     """Transitions de phase"""
     phase = np.angle(iq_wave)
     # Lissage de la phase
+    if unwrap:
+        phase = np.unwrap(phase)
     if window_size > 1:
         window = df.get_window(window_type,window_size)
         window /= np.sum(window)
