@@ -219,6 +219,9 @@ def get_fra_lib():
         "scalogram": "Scalogramme (CWT Morlet)",
         "demod_cpm_psk": "Démodulation CPM/FSK & PSK",
         "demod_type": "Sélectionner le type de modulation",
+        "more_bits": "bits de plus tronqués",
+        "doppler": "Correction décalage Doppler",
+        "doppler_txt": "Entrer la valeur de décalage Doppler à corriger en Hz :"
 
     }
     return fra_lib
@@ -442,6 +445,9 @@ def get_eng_lib():
         "scalogram": "Scalogram (Morlet CWT)",
         "demod_cpm_psk": "CPM/FSK & PSK Demodulation",
         "demod_type": "Select modulation type",
+        "more_bits": "more bits truncated",
+        "doppler": "Doppler Offset Correction",
+        "doppler_txt": "Enter the Doppler offset value to correct in Hz :"
 
     }
     return eng_lib

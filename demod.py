@@ -471,3 +471,82 @@ def eye_diagram_with_metrics(samples, fs, baud_rate, channel="I", num_traces=500
     metrics["eye_opening_ratio"] = float(eye_opening_ratio) if eye_opening_ratio is not None else None
 
     return time, traces, metrics
+
+def costas_loop(x, fs, loop_bandwidth, order=2):
+    """Boucle de Costas : verrouillage de phase"""
+    # Normalise amplitude & bw
+    x = x/np.max(np.abs(x))
+    Bn = loop_bandwidth / fs
+    zeta = 0.707  # damping
+    
+    # Coefficients
+    denom = 1 + 2*zeta*Bn + Bn**2
+    Kp = (4*zeta*Bn) / denom
+    Ki = (4*Bn**2) / denom
+    
+    phase = 0.0
+    freq_acc = 0.0
+    out = []
+    
+    for sample in x:
+        mixed = sample * np.exp(-1j*phase)
+        
+        # Detection d'erreur (BPSK/QPSK)
+        if order == 2:  # BPSK
+            error = (np.sign(mixed.real) * mixed.imag)
+        elif order == 4:  # QPSK
+            error = np.sign(mixed.real) * mixed.imag - np.sign(mixed.imag) * mixed.real
+        else:
+            raise ValueError("Only BPSK (2) and QPSK (4) supported.")
+        
+        # filtre de la boucle (contrôleur P&I)
+        freq_acc += Ki * error
+        phase += freq_acc + Kp * error
+        
+        # Wrap phase
+        if phase > np.pi: 
+            phase -= 2*np.pi
+        elif phase < -np.pi: 
+            phase += 2*np.pi
+        
+        out.append(mixed)
+    
+    return np.array(out)
+
+def psk_demodulate(sig, fs, symbol_rate, order=2, gray=True):
+    """Démodulation BPSK/QPSK"""
+    # Recup porteuse
+    bw_loop = symbol_rate * 0.01 # BW boucle sur critère de rapidité. Compromis actuel suppose RSB faible mais correct.
+    recovered = costas_loop(sig, fs, loop_bandwidth=bw_loop, order=order)
+
+    # Timing symbole, sps fractionnel
+    sps_exact = fs / symbol_rate
+    n_symbols = int(round(len(recovered) / sps_exact))
+
+    symbols = []
+    for k in range(n_symbols):
+        idx = int(round(k * sps_exact + sps_exact / 2))
+        if idx < len(recovered):
+            symbols.append(recovered[idx])
+    symbols = np.array(symbols)
+
+    if order == 2:  # BPSK
+        bits = (np.real(symbols) > 0).astype(int)
+        
+        return np.array(bits, dtype=np.uint8)
+
+    elif order == 4:  # QPSK
+        decisions = []
+        for s in symbols:
+            if s.real >= 0 and s.imag >= 0:
+                dibit = (0,0) if gray else (0,0)  # pareil gray ou naturel
+            elif s.real < 0 and s.imag >= 0:
+                dibit = (0,1) if gray else (0,1)
+            elif s.real < 0 and s.imag < 0:
+                dibit = (1,1) if gray else (1,0)
+            else:
+                dibit = (1,0) if gray else (1,1)
+            decisions.extend(dibit)
+
+        return np.array(decisions, dtype=np.uint8)
+    

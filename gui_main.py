@@ -872,6 +872,23 @@ def center_signal():
 
     plot_initial_graphs()
 
+def apply_doppler_correction():
+    global iq_wave
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # entrée de la vitesse en m/s
+    freq_offset = tk.simpledialog.askstring(lang["doppler"], lang["doppler_txt"], parent=root)
+    if freq_offset is None:
+        if debug is True:
+            print("Correction Doppler non appliquée, valeur non définie")
+        return
+    freq_offset = float(freq_offset)
+    iq_wave,_ = sm.doppler_lin_shift(iq_wave, frame_rate, 0, freq_offset)
+    if debug is True:
+        print(f"Doppler appliqué avec une correction de {freq_offset} Hz.")
+    plot_initial_graphs()
+
 # Fonctions de mesure de la rapidité de modulation
 def psf():
     # Mesure de la rapidité de modulation par la FFT de puissance. Polyvalente.
@@ -1623,12 +1640,12 @@ def demod_cpm_psk():
         if param_order.get() == lang["param_order4"]:
             mapping_nat.config(state=tk.NORMAL)
             mapping_gray.config(state=tk.NORMAL)
-            mapping_custom.config(state=tk.NORMAL)
+            # mapping_custom.config(state=tk.NORMAL)
             param_mapping.set(lang["mapping_nat"])
         else:
             mapping_nat.config(state=tk.DISABLED)
             mapping_gray.config(state=tk.DISABLED)
-            mapping_custom.config(state=tk.DISABLED)
+            # mapping_custom.config(state=tk.DISABLED)
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
     place_relative(popup, root, 350, 300)
@@ -1653,30 +1670,18 @@ def demod_cpm_psk():
     mapping_nat.pack()
     mapping_gray = tk.Radiobutton(popup, text=lang["mapping_gray"], variable=param_mapping, value=lang["mapping_gray"], state=tk.DISABLED)
     mapping_gray.pack()
-    mapping_custom = tk.Radiobutton(popup, text=lang["mapping_custom"], variable=param_mapping, value=lang["mapping_custom"], state=tk.DISABLED)
-    mapping_custom.pack()
+    # mapping_custom = tk.Radiobutton(popup, text=lang["mapping_custom"], variable=param_mapping, value=lang["mapping_custom"], state=tk.DISABLED)
+    # mapping_custom.pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()    
     popup.wait_window()
-    
-    if modulation_type.get() == lang["demod_psk"]:
-        time, diff = em.phase_time_angle(iq_wave, frame_rate, diff_window, window_choice)
-        diff /= np.max(np.abs(diff))
-        mod_type = "PSK"
-        if debug is True:
-            print("Démodulation PSK sélectionnée")
-    else:
-        time, diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
-        diff /= np.max(np.abs(diff))
-        mod_type = "CPM/FSK"
-        if debug is True:
-            print("Démodulation FSK sélectionnée")
 
     if target_rate.get() == "":
         if debug is True:
-            print("Rapidité de démodulation non définie.")
+            print("Pas de choix de rapidité de démodulation : Echec")
         return
     elif float(target_rate.get()) < 1:
-        print("Pas de rapidité de démodulation définie. Essai aveugle")
+        if debug is True:
+            print("Pas de rapidité de démodulation définie. Essai aveugle")
         target_rate = None
     else:
         target_rate = float(target_rate.get())
@@ -1690,23 +1695,57 @@ def demod_cpm_psk():
         mapping = "gray"
     elif param_mapping.get() == lang["mapping_custom"]:
         mapping = tk.simpledialog.askstring(lang["mapping_custom"], lang["mapping_custom_desc"], parent=root)
-        # actuellement un string sous forme de "0,1,2,3" ou "00,01,10,11" pour 4fsk. A transformer en liste
+        # non utilisé. à modifier dans demod.py, accepte actuellement chaîne de type "(0,0),(0,1),(0,2),(0,3)"
         mapping = list(eval(mapping))
 
-    # fonction de démod et slice bits en fonction de l'ordre
-    try:
-        symbols, clock = dm.wpcr(diff, frame_rate, target_rate, tau, precision, debug)
-        if len(symbols) > 2 and order == 2:
-            bits=dm.slice_binary(symbols)
+    if modulation_type.get() == lang["demod_psk"]:
+        time, diff = em.phase_time_angle(iq_wave, frame_rate, diff_window, window_choice)
+        mod_type = "PSK"
+        if debug is True:
+            print("Démodulation PSK sélectionnée")
+        if order != 2 and order != 4:
             if debug is True:
-                print("Démodulation FSK 2 réalisée, bits: ", len(bits))
-        elif len(symbols) > 2 and order == 4:
-            bits = dm.slice_4ary(symbols,mapping)
-            if debug is True :
-                print(f"Démodulation {mod_type} {order} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}") 
+                print("Ordre de modulation PSK non supporté")
+            return
+        if mapping == "gray":
+            gray = True
         else:
-            bits=0
+            gray = False
+        try:
+            if target_rate is not None:
+                clock = target_rate
+                bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray)
+            else:
+                clock = dm.estimate_baud_rate(diff, frame_rate)
+                bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray)
+            if debug is True :
+                print(f"Démodulation {mod_type}{order} réalisée, rapidité {clock} bauds, bits: {len(bits)}")
+        except:
+            if debug is True:
+                print("Echec de démodulation PSK")
+            bits = 0
+
+    else:
+        time, diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
+        diff /= np.max(np.abs(diff))
+        mod_type = "CPM/FSK"
+        if debug is True:
+            print("Démodulation FSK sélectionnée")
+        # fonction de démod et slice bits en fonction de l'ordre
+        try:
+            symbols, clock = dm.wpcr(diff, frame_rate, target_rate, tau, precision, debug)
+            if len(symbols) > 2 and order == 2:
+                bits=dm.slice_binary(symbols)
+                if debug is True:
+                    print("Démodulation FSK 2 réalisée, bits: ", len(bits))
+            elif len(symbols) > 2 and order == 4:
+                bits = dm.slice_4ary(symbols,mapping)
+                if debug is True :
+                    print(f"Démodulation {mod_type} {order} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}") 
+        except:
+                bits=0
         # plot des bits demodulés
+    try:
         clear_plot()
         fig = plt.figure()
         fig.suptitle(lang["estim_bits"])
@@ -1743,14 +1782,18 @@ def demod_cpm_psk():
     try:
         text_output= f"{lang['estim_bits']} ({len(bits)}). {lang['clock_frequency']} {clock} Hz : \n"
         # lignes de bits
-        formatted_bits = "".join(map(str, bits))
+        max_display = 50000  # nombre max de bits à afficher
+        display_bits = bits[:max_display]
+        formatted_bits = "".join(map(str, display_bits))
+        if len(bits) >= max_display:
+            formatted_bits += f"\n... ({len(bits) - max_display} {lang['more_bits']})"
         text_output += formatted_bits
     except:
-        bits,bits_plot,formatted_bits = "","",""
+        display_bits, bits,bits_plot,formatted_bits = "","","", ""
         text_output = lang["bits_fail"]
     text_box.insert(tk.END, text_output)
     text_box.config(state=tk.DISABLED)
-    del canvas, time, diff, bits, bits_plot, formatted_bits, text_output, text_box
+    del canvas, time, diff, bits, display_bits, bits_plot, formatted_bits, text_output, text_box
 
 def demod_fm():
     global iq_wave
@@ -2356,6 +2399,7 @@ def load_lang_changes():
     move_submenu.add_command(label=lang["move_frq"], command=move_frequency)
     move_submenu.add_command(label=lang["move_freq_cursors"], command=move_frequency_cursors)
     move_submenu.add_command(label=lang["auto_center"],command=center_signal)
+    move_submenu.add_command(label=lang["doppler"], command=apply_doppler_correction)
     mod_menu.add_cascade(label=lang["center_frq"],menu=move_submenu)
     # Echantillonnage
     sample_submenu = tk.Menu(mod_menu,tearoff=0)

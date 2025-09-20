@@ -173,3 +173,20 @@ def hilbert(x):
     x_analytic = np.fft.ifft(Xf)
     
     return x_analytic
+
+def doppler_lin_shift(iq_wave, frame_rate, start_freq, end_freq):
+    """Applique un décalage Doppler linéaire au signal IQ"""
+    n = len(iq_wave)
+    t = np.arange(n) / frame_rate
+    
+    # Trajectoire de fréquence linéaire
+    inst_freq = start_freq + (end_freq - start_freq) * (t / t[-1])
+    
+    # Phase = -2π ∫ f(t) dt
+    phase = -2 * np.pi * np.cumsum(inst_freq) / frame_rate
+    
+    # Correction (ou simulation si start_freq/end_freq choisis arbitrairement)
+    correction = np.exp(1j * phase)
+    iq_out = iq_wave * correction
+    
+    return iq_out, inst_freq
