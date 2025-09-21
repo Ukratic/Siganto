@@ -221,7 +221,9 @@ def get_fra_lib():
         "demod_type": "Sélectionner le type de modulation",
         "more_bits": "bits de plus tronqués",
         "doppler": "Correction décalage Doppler",
-        "doppler_txt": "Entrer la valeur de décalage Doppler à corriger en Hz :"
+        "doppler_txt": "Entrer la valeur de décalage Doppler à corriger en Hz :",
+        "param_diff" : "Différentiel",
+        "param_offset" : "Décalage 45°",
 
     }
     return fra_lib
@@ -447,7 +449,9 @@ def get_eng_lib():
         "demod_type": "Select modulation type",
         "more_bits": "more bits truncated",
         "doppler": "Doppler Offset Correction",
-        "doppler_txt": "Enter the Doppler offset value to correct in Hz :"
+        "doppler_txt": "Enter the Doppler offset value to correct in Hz :",
+        "param_diff" : "Differential",
+        "param_offset" : "Offset 45°",
 
     }
     return eng_lib

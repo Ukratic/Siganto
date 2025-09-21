@@ -513,9 +513,9 @@ def costas_loop(x, fs, loop_bandwidth, order=2):
     
     return np.array(out)
 
-def psk_demodulate(sig, fs, symbol_rate, order=2, gray=True):
+def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False, offset=False):
     """Démodulation BPSK/QPSK"""
-    # Recup porteuse
+    # Recup par boucle de Costas
     bw_loop = symbol_rate * 0.01 # BW boucle sur critère de rapidité. Compromis actuel suppose RSB faible mais correct.
     recovered = costas_loop(sig, fs, loop_bandwidth=bw_loop, order=order)
 
@@ -530,13 +530,19 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=True):
             symbols.append(recovered[idx])
     symbols = np.array(symbols)
 
-    if order == 2:  # BPSK
+    if order == 2 and differential == False:  # BPSK
         bits = (np.real(symbols) > 0).astype(int)
         
         return np.array(bits, dtype=np.uint8)
 
-    elif order == 4:  # QPSK
-        decisions = []
+    elif order == 2 and differential == True: # DBPSK
+        phases = np.angle(symbols * np.conj(np.roll(symbols, 1)))
+        bits = (phases > 0).astype(np.uint8)[1:] 
+
+        return np.array(bits, dtype=np.uint8)
+
+    elif order == 4 and differential == False and offset == False:  # QPSK
+        bits = []
         for s in symbols:
             if s.real >= 0 and s.imag >= 0:
                 dibit = (0,0) if gray else (0,0)  # pareil gray ou naturel
@@ -546,7 +552,48 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=True):
                 dibit = (1,1) if gray else (1,0)
             else:
                 dibit = (1,0) if gray else (1,1)
-            decisions.extend(dibit)
+            bits.extend(dibit)
 
-        return np.array(decisions, dtype=np.uint8)
+        return np.array(bits, dtype=np.uint8)
+
+    elif order == 4 and offset == True and differential == False: # OQPSK
+        I = (np.real(symbols) > 0).astype(np.uint8)
+        Q = (np.imag(symbols) > 0).astype(np.uint8)
+
+        if not gray:
+            Q = Q ^ I 
+        # Décalage Q par demi symbole
+        Q = np.roll(Q, -1)
+        bits = np.empty(2*len(I), dtype=np.uint8)
+        bits[0::2] = I
+        bits[1::2] = Q
+
+        return np.array(bits, dtype=np.uint8)
+
+    elif order == 4 and offset == False and differential == True: # DQPSK
+        diffs = symbols * np.conj(np.roll(symbols, 1))
+        phases = np.angle(diffs)
+        bits = []
+
+        # tables de mapping
+        phase_bits_gray = {0: (0,0),  np.pi/2: (0,1),  np.pi: (1,1), -np.pi/2: (1,0)}
+        phase_bits_nat  = {0: (0,0),  np.pi/2: (0,1),  np.pi: (1,0), -np.pi/2: (1,1)}
+        mapping = phase_bits_gray if gray else phase_bits_nat
+
+        for ph in phases[1:]:
+            # Normalisation de phase [-pi, pi]
+            ph = (ph + np.pi) % (2*np.pi) - np.pi
+            # Map au quadrant le plus proche
+            if -np.pi/4 <= ph < np.pi/4:
+                bits.extend(mapping[0])
+            elif np.pi/4 <= ph < 3*np.pi/4:
+                bits.extend(mapping[np.pi/2])
+            elif -3*np.pi/4 <= ph < -np.pi/4:
+                bits.extend(mapping[-np.pi/2])
+            else:
+                bits.extend(mapping[np.pi])
+
+        return np.array(bits, dtype=np.uint8)
+
+    
     

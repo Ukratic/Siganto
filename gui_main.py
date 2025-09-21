@@ -333,7 +333,8 @@ def plot_other_graphs():
     ax[0].set_title(f"{lang['window']} {window_choice}")
 
     # Constellation
-    line_constellation = ax[1].scatter(np.real(iq_wave), np.imag(iq_wave), s=1)
+    iq_constel = iq_wave/np.max(np.abs(iq_wave))
+    line_constellation = ax[1].scatter(np.real(iq_constel), np.imag(iq_constel), s=1)
     ax[1].set_xlabel("In-Phase")
     ax[1].set_ylabel("Quadrature")
 
@@ -360,32 +361,28 @@ def plot_other_graphs():
         freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
         stft.set_data(stft_matrix)
         # Màj constellation
-        line_constellation.set_offsets(np.c_[np.real(iq_wave), np.imag(iq_wave)])
+        iq_constel = iq_wave/np.max(np.abs(iq_wave))
+        line_constellation.set_offsets(np.c_[np.real(iq_constel), np.imag(iq_constel)])
         # Màj DSP
         wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
         line_spectrum.set_ydata(wav_mag)
 
         canvas.draw()
 
-    def move_left(event):
+    def change_freq(step, event=None):
         global fcenter
-        fcenter -= 1  # Freq - 1 Hz
+        fcenter += step
         update_graph()
 
-    def move_right(event):
-        global fcenter
-        fcenter += 1  # Freq + 1 Hz
-        update_graph()
-
-    # Flèches du clavier pour déplacer la fréquence centrale
-    root.bind("<Left>", move_left)
-    root.bind("<Right>", move_right)
-    # Sinon boutons sur l'interface
+    # Flèches du clavier pour déplacer la fréquence centrale grossièrement
+    root.bind("<Left>", lambda e: change_freq(-1, e))
+    root.bind("<Right>", lambda e: change_freq(1, e))
+    # Sinon boutons sur l'interface pour déplacer finement
     button_frame = tk.Frame(plot_frame)
     button_frame.pack(side=tk.BOTTOM, fill=tk.X)
-    left_button = tk.Button(button_frame, text="←", command=move_left)
+    left_button = tk.Button(button_frame, text="←", command=lambda: change_freq(-0.01))
     left_button.pack(side=tk.LEFT, padx=10)
-    right_button = tk.Button(button_frame, text="→", command=move_right)
+    right_button = tk.Button(button_frame, text="→", command=lambda: change_freq(0.01))
     right_button.pack(side=tk.RIGHT, padx=10)
     
     canvas = FigureCanvasTkAgg(fig, plot_frame)
@@ -393,7 +390,7 @@ def plot_other_graphs():
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del spec, a0, a1, a2, f, stft_matrix, freqs, times, wav_mag
+    del spec, a0, a1, a2, f, stft_matrix, freqs, times, wav_mag, iq_constel
 
 # Fonc de changement de fenêtre FFT pour STFT
 def set_window():
@@ -1094,7 +1091,8 @@ def constellation():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    ax.scatter(np.real(iq_wave), np.imag(iq_wave), s=1)
+    iq_constel = iq_wave/np.max(np.abs(iq_wave))
+    ax.scatter(np.real(iq_constel), np.imag(iq_constel), s=1)
     ax.set_xlabel("In-Phase")
     ax.set_ylabel("Quadrature")
 
@@ -1646,14 +1644,22 @@ def demod_cpm_psk():
             mapping_nat.config(state=tk.DISABLED)
             mapping_gray.config(state=tk.DISABLED)
             # mapping_custom.config(state=tk.DISABLED)
+    def toggle_diff_offset():
+        # seulement si PSK
+        if modulation_type.get() == lang["demod_psk"]:
+            param_diff.config(state=tk.NORMAL)
+            param_offset.config(state=tk.NORMAL)
+        else:
+            param_diff.config(state=tk.DISABLED)
+            param_offset.config(state=tk.DISABLED)
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
-    place_relative(popup, root, 350, 300)
+    place_relative(popup, root, 350, 350)
     popup.title(lang["demod_param"])
     modulation_type = tk.StringVar()
     tk.Label(popup, text=lang["demod_type"]).pack()
     tk.Radiobutton(popup, text=lang["demod_fsk"], variable=modulation_type, value=lang["demod_fsk"]).pack()
-    tk.Radiobutton(popup, text=lang["demod_psk"], variable=modulation_type, value=lang["demod_psk"]).pack()
+    tk.Radiobutton(popup, text=lang["demod_psk"], variable=modulation_type, value=lang["demod_psk"], command=toggle_diff_offset).pack()
     modulation_type.set(lang["demod_fsk"])
 
     param_order = tk.StringVar()
@@ -1672,6 +1678,12 @@ def demod_cpm_psk():
     mapping_gray.pack()
     # mapping_custom = tk.Radiobutton(popup, text=lang["mapping_custom"], variable=param_mapping, value=lang["mapping_custom"], state=tk.DISABLED)
     # mapping_custom.pack()
+    param_diff_offset = tk.StringVar()
+    param_diff_offset.set("")
+    param_diff = tk.Radiobutton(popup, text=lang["param_diff"], variable=param_diff_offset, value=lang["param_diff"], state=tk.DISABLED)
+    param_diff.pack()
+    param_offset = tk.Radiobutton(popup, text=lang["param_offset"], variable=param_diff_offset, value=lang["param_offset"], state=tk.DISABLED)
+    param_offset.pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()    
     popup.wait_window()
 
@@ -1711,15 +1723,24 @@ def demod_cpm_psk():
             gray = True
         else:
             gray = False
+        if param_diff_offset.get() == lang["param_diff"]:
+            differential = True
+            offset = False
+        elif param_diff_offset.get() == lang["param_offset"]:
+            offset = True
+            differential = False
+        else:
+            offset = False
+            differential = False
         try:
             if target_rate is not None:
                 clock = target_rate
-                bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray)
+                bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray, differential=differential, offset=offset)
             else:
                 clock = dm.estimate_baud_rate(diff, frame_rate)
-                bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray)
+                bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray, differential=differential, offset=offset)
             if debug is True :
-                print(f"Démodulation {mod_type}{order} réalisée, rapidité {clock} bauds, bits: {len(bits)}")
+                print(f"Démodulation {mod_type}{order} {param_diff_offset.get()} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}")
         except:
             if debug is True:
                 print("Echec de démodulation PSK")
@@ -1764,6 +1785,12 @@ def demod_cpm_psk():
         ax.plot(bits_plot, "o-")
         ax.set_xlabel("Bits")
         ax.set_ylabel(lang["bits_value"])
+        if order == 2:
+            charset = ["0", "1"]
+        elif order == 4:
+            charset = ["00", "01", "10", "11"]
+        ax.set_yticks(range(len(charset)))
+        ax.set_yticklabels(charset)
     except :
         clear_plot()
         fig = plt.figure()
@@ -1915,6 +1942,10 @@ def demod_mfsk():
             num_bits = int(np.ceil(np.log2(order)))
             symbols = np.reshape(bits[: len(bits) // num_bits * num_bits], (-1, num_bits))
             bits_plot = np.array([int("".join(map(str, s)), 2) for s in symbols])
+            # build charset dynamically for any order
+            charset = [format(i, f"0{num_bits}b") for i in range(order)]
+            ax.set_yticks(range(order))
+            ax.set_yticklabels(charset)
         elif return_format == "char":
             charset = (string.digits + string.ascii_uppercase + string.ascii_lowercase + string.punctuation) # charset récupéré de la fonction demod.slice_mfsk
             mapping = {ch: i for i, ch in enumerate(charset)}
