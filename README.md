@@ -114,10 +114,9 @@ Overlap.
 -- 2 & 4 PSK demodulation.<br>
 
 *Planned for later :*<br>
--- Cursor selection improvement.<br>
+-- SCF in Cyclostationarity Metrics.<br>
 -- More parameters available in GUI.<br>
--- More demodulation options (differential, offset...).<br>
-
+-- Decoding tools.<br>
 
 ### Using the app
 1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file *gui_main.py* to launch.<br>

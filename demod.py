@@ -513,7 +513,7 @@ def costas_loop(x, fs, loop_bandwidth, order=2):
     
     return np.array(out)
 
-def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False, offset=False):
+def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False, offset=False, pi4=False):
     """Démodulation BPSK/QPSK"""
     # Recup par boucle de Costas
     bw_loop = symbol_rate * 0.01 # BW boucle sur critère de rapidité. Compromis actuel suppose RSB faible mais correct.
@@ -595,5 +595,63 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
 
         return np.array(bits, dtype=np.uint8)
 
+    elif order == 4 and offset and differential:  # DOQPSK
+        # Décalage OQPSK d'abord
+        I = (np.real(symbols) > 0).astype(np.uint8)
+        Q = (np.imag(symbols) > 0).astype(np.uint8)
+        Q = np.roll(Q, -1)  # Décalage demi symbole
+
+        oqpsk_syms = I + 1j*Q  # recombiner
+
+        # Puis décodage différentiel comme en DQPSK
+        diffs = oqpsk_syms * np.conj(np.roll(oqpsk_syms, 1))
+        phases = np.angle(diffs)
+
+        bits = []
+        phase_bits_gray = {0:(0,0), np.pi/2:(0,1), np.pi:(1,1), -np.pi/2:(1,0)}
+        phase_bits_nat  = {0:(0,0), np.pi/2:(0,1), np.pi:(1,0), -np.pi/2:(1,1)}
+        mapping = phase_bits_gray if gray else phase_bits_nat
+
+        for ph in phases[1:]:
+            ph = (ph + np.pi) % (2*np.pi) - np.pi
+            if -np.pi/4 <= ph < np.pi/4:
+                bits.extend(mapping[0])
+            elif np.pi/4 <= ph < 3*np.pi/4:
+                bits.extend(mapping[np.pi/2])
+            elif -3*np.pi/4 <= ph < -np.pi/4:
+                bits.extend(mapping[-np.pi/2])
+            else:
+                bits.extend(mapping[np.pi])
+
+        return np.array(bits, dtype=np.uint8)
+    
+    elif order == 4 and pi4:  # π/4-QPSK
+        # On gère le cas général qui est en fait π/4-DQPSK
+        diffs = symbols * np.conj(np.roll(symbols, 1))
+        phases = np.angle(diffs)
+
+        bits = []
+        # Table de mapping π/4 en gray
+        phase_bits = {
+            np.pi/4:  (0,0),
+            3*np.pi/4:(0,1),
+            -3*np.pi/4:(1,1),
+            -np.pi/4:(1,0)
+        }
+
+        for ph in phases[1:]:
+            ph = (ph + np.pi) % (2*np.pi) - np.pi
+            if -np.pi/2 < ph <= 0:
+                dibit = phase_bits[-np.pi/4]
+            elif -np.pi <= ph <= -np.pi/2:
+                dibit = phase_bits[-3*np.pi/4]
+            elif 0 < ph <= np.pi/2:
+                dibit = phase_bits[np.pi/4]
+            else:
+                dibit = phase_bits[3*np.pi/4]
+
+            bits.extend(dibit)
+
+        return np.array(bits, dtype=np.uint8)
     
     

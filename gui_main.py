@@ -1649,16 +1649,18 @@ def demod_cpm_psk():
         if modulation_type.get() == lang["demod_psk"]:
             param_diff.config(state=tk.NORMAL)
             param_offset.config(state=tk.NORMAL)
+            # ajouter pi/4 : déjà prêt dans la fonction de demod
         else:
             param_diff.config(state=tk.DISABLED)
             param_offset.config(state=tk.DISABLED)
+
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
     place_relative(popup, root, 350, 350)
     popup.title(lang["demod_param"])
     modulation_type = tk.StringVar()
     tk.Label(popup, text=lang["demod_type"]).pack()
-    tk.Radiobutton(popup, text=lang["demod_fsk"], variable=modulation_type, value=lang["demod_fsk"]).pack()
+    tk.Radiobutton(popup, text=lang["demod_fsk"], variable=modulation_type, value=lang["demod_fsk"], command=toggle_diff_offset).pack()
     tk.Radiobutton(popup, text=lang["demod_psk"], variable=modulation_type, value=lang["demod_psk"], command=toggle_diff_offset).pack()
     modulation_type.set(lang["demod_fsk"])
 
@@ -1678,11 +1680,11 @@ def demod_cpm_psk():
     mapping_gray.pack()
     # mapping_custom = tk.Radiobutton(popup, text=lang["mapping_custom"], variable=param_mapping, value=lang["mapping_custom"], state=tk.DISABLED)
     # mapping_custom.pack()
-    param_diff_offset = tk.StringVar()
-    param_diff_offset.set("")
-    param_diff = tk.Radiobutton(popup, text=lang["param_diff"], variable=param_diff_offset, value=lang["param_diff"], state=tk.DISABLED)
+    use_diff = tk.BooleanVar(value=False)
+    use_offset = tk.BooleanVar(value=False)
+    param_diff = tk.Checkbutton(popup, text=lang["param_diff"], variable=use_diff, state=tk.DISABLED)
     param_diff.pack()
-    param_offset = tk.Radiobutton(popup, text=lang["param_offset"], variable=param_diff_offset, value=lang["param_offset"], state=tk.DISABLED)
+    param_offset = tk.Checkbutton(popup, text=lang["param_offset"], variable=use_offset, state=tk.DISABLED)
     param_offset.pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()    
     popup.wait_window()
@@ -1723,15 +1725,8 @@ def demod_cpm_psk():
             gray = True
         else:
             gray = False
-        if param_diff_offset.get() == lang["param_diff"]:
-            differential = True
-            offset = False
-        elif param_diff_offset.get() == lang["param_offset"]:
-            offset = True
-            differential = False
-        else:
-            offset = False
-            differential = False
+        differential = use_diff.get()
+        offset = use_offset.get()
         try:
             if target_rate is not None:
                 clock = target_rate
@@ -1740,7 +1735,15 @@ def demod_cpm_psk():
                 clock = dm.estimate_baud_rate(diff, frame_rate)
                 bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray, differential=differential, offset=offset)
             if debug is True :
-                print(f"Démodulation {mod_type}{order} {param_diff_offset.get()} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}")
+                if differential and not offset:
+                    alt_psk = "D"
+                elif offset and not differential:
+                    alt_psk = "O"
+                elif differential and offset:
+                    alt_psk = "DO"
+                else:
+                    alt_psk = ""
+                print(f"Démodulation {alt_psk}{mod_type}{order} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}")
         except:
             if debug is True:
                 print("Echec de démodulation PSK")
