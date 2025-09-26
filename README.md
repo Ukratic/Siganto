@@ -2,12 +2,11 @@
 
 Signal Analysis Toolbox : a free & open-source digital signal analyzer.<br>
 
-Read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs, measurements and modifications.
+Read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs, measurements and modifications. FSK & PSK demodulation is also available, with more to come later.
 Real-time applications such as dealing with incoming streams are outside the scope of this tool.<br>
-Some of the identification is automated (see some examples with screenshots below) but should always be confirmed manually.<br>
+Some of the analysis is automated (see some examples with screenshots below) but should always be confirmed manually.<br>
 
-SigAnTo supports mostly analysis for now, with manual fine-tuning and 2 & 4-FSK demodulation. More to come later.<br>
-Be aware that the entire file is displayed, not looped over in chunks as many other SDR tools do (with real-time display). Therefore, this tool is not meant to work with very long recordings, you may experience some acceptable sluggishness if your file contains samples in the order of a few millions but the GUI will likely become downright painful to use with a file containing several tens or hundreds of millions of samples or more.<br>
+Be aware that the entire file is displayed, not looped over in chunks as many other SDR tools do, especially when they are meant to handle real-time display. Therefore, this tool is not meant to work with very long recordings. You may experience some acceptable sluggishness if your file contains samples in the order of a few millions, but the GUI will likely become downright painful to use with a file containing several tens or hundreds of millions of samples or more. Warnings are in place for a few potentially breaking actions with large files.<br>
 
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_1.png" alt="Main"/>
 
@@ -24,6 +23,7 @@ Window size (default based on number of samples), <br>
 Window function (Kaiser, Hann, Hamming, Blackman, Bartlett, Flattop, Rectangular), <br>
 Overlap.
 - Central Frequency offset (enter a value, cursor selection or fine-tuning with arrow keys ; last option available only on tri-graph group for now)
+- Coarse doppler correction (essentially a diagonal frequency shift)
 - Down or Up Sampling (by ratio of an integer >1)
 - Cut part of the signal in time (enter a value or by cursor selection ; the latter only works reliably on spectrogram)
 - Modify parameters for transitions (phase, frequency) & persistence graphs
@@ -54,14 +54,15 @@ Overlap.
 - Eye Diagram
 #### 8. Cyclostationarity Metrics
 - Autocorrelation function (fft-based fast variant or complete)
+- Spectral Correlation function
 #### 9. OFDM Metrics
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
 #### 10. Demodulation
-- 2 or 4 CPM/FSK & PSK Demodulation (outputs a stream of bits and graph of transitions)
+- 2 or 4 CPM/FSK & PSK Demodulation (with optional baud rate estimation)
 - AM & FM Demodulation (visual output and result signal saved for playback or further analysis)
 - MFSK Demodulation (2 methods : tone detection or from smoothed frequency transitions)
 #### 11. Audio
-- Audio playback (when listening to an amplitude modulated signal for instance, you may need to use the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded)
+- Audio playback (you may need to choose the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded)
 
 ### Examples :
 - Spectrogram of a Chinese 4+4 <br>
@@ -69,16 +70,16 @@ Overlap.
 - dPMR Constellation <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.png" alt="dPMR"/>
 - PSD of IS-95 (CDMA) <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="WiFi"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="2G"/>
 - TETRA Symbol rate <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_5.png" alt="TETRA"/>
 - TETRAPOL Autocorrelation Function <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_6.png" alt="TETRAPOL"/>
 - CIS-45 OFDM Parameters <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="CIS-45"/>
-- AIS Frequency transitions <br>
+- EDACS Frequency transitions <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_8.png" alt="FSK_transitions"/>
-- EDACS Demodulation <br>
+- AIS Demodulation <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_9.png" alt="FSK_demod"/>
 
 ### Changelog :
@@ -112,9 +113,9 @@ Overlap.
 -- Eye Diagram added to Phase Metrics.<br>
 -- Morlet CWT Scalogram added to Frequency Metrics.<br>
 -- 2 & 4 PSK demodulation.<br>
+-- SCF in Cyclostationarity Metrics.<br>
 
 *Planned for later :*<br>
--- SCF in Cyclostationarity Metrics.<br>
 -- More parameters available in GUI.<br>
 -- Decoding tools.<br>
 

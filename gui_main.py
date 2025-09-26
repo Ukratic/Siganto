@@ -1810,7 +1810,14 @@ def demod_cpm_psk():
     text_box.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
     text_box.config(state=tk.NORMAL)  # Temporarily enable text box
     try:
-        text_output= f"{lang['estim_bits']} ({len(bits)}). {lang['clock_frequency']} {clock} Hz : \n"
+        if mod_type == "CPM/FSK" and order == 4:
+            text_output= f"{mod_type}{order}. {lang['clock_frequency']} {clock} Hz, {mapping} mapping. {lang['estim_bits']} : {len(bits)}. \n"
+        elif mod_type == "PSK" and order == 4:
+            text_output= f"{alt_psk}{mod_type}{order} {clock} bauds, {mapping} mapping. {lang['estim_bits']} : {len(bits)}. \n"
+        elif mod_type == "CPM/FSK" and order == 2:
+            text_output= f"{mod_type}{order}. {lang['clock_frequency']} {clock} Hz. {lang['estim_bits']} : {len(bits)}. \n"
+        elif mod_type == "PSK" and order == 2:
+            text_output= f"{alt_psk}{mod_type}{order} {clock} bauds. {lang['estim_bits']} : {len(bits)}. \n"
         # lignes de bits
         max_display = 50000  # nombre max de bits à afficher
         display_bits = bits[:max_display]
@@ -1951,8 +1958,8 @@ def demod_mfsk():
             ax.set_yticklabels(charset)
         elif return_format == "char":
             charset = (string.digits + string.ascii_uppercase + string.ascii_lowercase + string.punctuation) # charset récupéré de la fonction demod.slice_mfsk
-            mapping = {ch: i for i, ch in enumerate(charset)}
-            bits_plot = np.array([mapping[ch] for ch in bits if ch in mapping])
+            charmap = {ch: i for i, ch in enumerate(charset)}
+            bits_plot = np.array([charmap[ch] for ch in bits if ch in charmap])
             ax.set_yticks(range(len(charset)))
             ax.set_yticklabels(list(charset))
         else:
@@ -1982,7 +1989,10 @@ def demod_mfsk():
     text_box.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
     text_box.config(state=tk.NORMAL)
     try:
-        text_output = f"{lang['estim_bits']} ({len(bits)}). {lang['clock_frequency']} {clock} Hz : \n"
+        if param_method.get() == "main":
+            text_output = f"MFSK{order}. {lang['clock_frequency']} {clock} Hz, {mapping} mapping. {lang['estim_bits']} : {len(bits)}. \n"
+        elif param_method.get() == "alt":
+            text_output= f"MFSK{order} {clock} bauds, {mapping} mapping. {lang['estim_bits']} : {len(bits)}. \n"
         # lignes de bits
         if return_format == "int" or return_format == "char":
             # si format int, on sépare par une virgule chaque symbole
