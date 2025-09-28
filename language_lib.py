@@ -89,7 +89,7 @@ def get_fra_lib():
         "time_xy": "Temps",
         "fc": "Fréquence Centrale",
         "move_txt": "Entrer la correction de FC en Hz (en négatif pour décaler vers la droite) :",
-        "confirm_wait" : "Cela peut prendre du temps ou échouer. Continuer?",
+        "confirm_wait" : "Cette action peut prendre du temps ou échouer. Continuer?",
         "smoothing_val": "Entrez une valeur de lissage des transitions (désactivé par défaut) :",
         "alpha": "Recherche de l'alpha optimal",
         "estim_tu": "Entrer la valeur estimée de la durée symbole OFDM (en ms, par la fonction d'autocorrélation) :",
@@ -224,6 +224,8 @@ def get_fra_lib():
         "doppler_txt": "Entrer la valeur de décalage Doppler à corriger en Hz :",
         "param_diff" : "Différentiel",
         "param_offset" : "Décalage 45°",
+        "scf" : "Corrélation spectrale (SCF)",
+        "cyclic_f" : "Fréquence cyclique",
 
     }
     return fra_lib
@@ -318,7 +320,7 @@ def get_eng_lib():
         "time_xy": "Time",
         "fc": "Center Frequency",
         "move_txt": "Enter the CF correction in Hz (negative to shift right) :",
-        "confirm_wait" : "This may take some time or fail. Continue?",
+        "confirm_wait" : "This action may take some time or fail. Continue?",
         "smoothing_val": "Enter a smoothing value for transitions (disabled by default) :",
         "alpha": "Optimal alpha search",
         "estim_tu": "Enter the estimated OFDM symbol duration value (in ms, from the autocorrelation function) :",
@@ -452,6 +454,8 @@ def get_eng_lib():
         "doppler_txt": "Enter the Doppler offset value to correct in Hz :",
         "param_diff" : "Differential",
         "param_offset" : "Offset 45°",
+        "scf" : "Spectral Correlation Function",
+        "cyclic_f" : "Cyclic frequency",
 
     }
     return eng_lib

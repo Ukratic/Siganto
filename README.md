@@ -2,9 +2,9 @@
 
 Signal Analysis Toolbox : a free & open-source digital signal analyzer.<br>
 
-Read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs, measurements and modifications. FSK & PSK demodulation is also available, with more to come later.
+Read .wav files (recorded from SDR tools, obtained from somewhere, simulated...) and identify the signal parameters (modulation scheme, symbol rate, ACF...) through various graphs, measurements and modifications. Some of the analysis is automated (see some examples with screenshots below) but should always be confirmed manually. 
+FSK & PSK demodulation is also available, with more to come later.<br>
 Real-time applications such as dealing with incoming streams are outside the scope of this tool.<br>
-Some of the analysis is automated (see some examples with screenshots below) but should always be confirmed manually.<br>
 
 Be aware that the entire file is displayed, not looped over in chunks as many other SDR tools do, especially when they are meant to handle real-time display. Therefore, this tool is not meant to work with very long recordings. You may experience some acceptable sluggishness if your file contains samples in the order of a few millions, but the GUI will likely become downright painful to use with a file containing several tens or hundreds of millions of samples or more. Warnings are in place for a few potentially breaking actions with large files.<br>
 
@@ -113,6 +113,7 @@ Overlap.
 -- Eye Diagram added to Phase Metrics.<br>
 -- Morlet CWT Scalogram added to Frequency Metrics.<br>
 -- 2 & 4 PSK demodulation.<br>
+-- Fixed MFSK demodulation.<br>
 -- SCF in Cyclostationarity Metrics.<br>
 
 *Planned for later :*<br>

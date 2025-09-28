@@ -274,8 +274,9 @@ def plot_initial_graphs():
     # DSP
     bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N, overlap, window_choice)
     Pxx_shifted = np.fft.fftshift(Pxx) 
-    f_shifted = np.fft.fftshift(f)
-    ax[1].plot(f_shifted, Pxx_shifted)
+    f_centered = np.linspace(-frame_rate/2, frame_rate/2, len(f)) # même échelle x que le spectrogramme
+    ax[1].plot(f_centered, Pxx_shifted)
+    ax[1].set_xlim(-frame_rate/2, frame_rate/2)
     ax[1].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[1].set_ylabel("Amplitude")
     ax[1].axvline(x=fmax, color='r', linestyle='--')
@@ -284,6 +285,8 @@ def plot_initial_graphs():
         print("Bande passante estimée: ", bw, " Hz")
         print("Fréquence max BW: ", fmax, " Hz")
         print("Fréquence min BW: ", fmin, " Hz")
+    
+    ax[0].sharex(ax[1]) # zoom des 2 graphes en même temps
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -1160,6 +1163,33 @@ def autocorr_full():
     canvas.draw()
     del yx, lags, canvas
 
+#SCF
+def scf():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["scf"])
+    print(lang["scf"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    if not tk.messagebox.askokcancel(lang["scf"], lang["confirm_wait"], parent=root):
+        return
+    ax = plt.subplot()
+    if debug is True:
+        print("Peut générer des ralentissements. Patienter")
+    scf, faxis, alphas = em.scf_tsm(iq_wave, frame_rate, N, window_choice, overlap, alpha_step_hz=10)
+    extent = (faxis[0], faxis[-1], alphas[-1], alphas[0])
+    ax.imshow(scf, aspect='auto', extent=extent, cmap='jet', origin='upper')
+    ax.set_xlabel(f"{lang["freq_xy"]} [Hz]")
+    ax.set_ylabel(f"{lang["cyclic_f"]} [Hz]")
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del scf, faxis, alphas, extent, canvas
+
 # Fonctions de mesures de transitions de phase et de fréquence
 def phase_difference():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
@@ -1734,15 +1764,15 @@ def demod_cpm_psk():
             else:
                 clock = dm.estimate_baud_rate(diff, frame_rate)
                 bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray, differential=differential, offset=offset)
+            if differential and not offset:
+                alt_psk = "D"
+            elif offset and not differential:
+                alt_psk = "O"
+            elif differential and offset:
+                alt_psk = "DO"
+            else:
+                alt_psk = ""
             if debug is True :
-                if differential and not offset:
-                    alt_psk = "D"
-                elif offset and not differential:
-                    alt_psk = "O"
-                elif differential and offset:
-                    alt_psk = "DO"
-                else:
-                    alt_psk = ""
                 print(f"Démodulation {alt_psk}{mod_type}{order} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}")
         except:
             if debug is True:
@@ -2497,6 +2527,7 @@ def load_lang_changes():
     # ACF
     acf_menu.add_command(label=lang["autocorr"], command=autocorr)
     acf_menu.add_command(label=lang["autocorr_full"], command=autocorr_full)
+    acf_menu.add_command(label=lang["scf"], command=scf)
     # OFDM
     ofdm_menu.add_command(label=lang["ofdm_symbol"], command=alpha_from_symbol)
     ofdm_menu.add_command(label=lang["ofdm_results"], command=ofdm_results)

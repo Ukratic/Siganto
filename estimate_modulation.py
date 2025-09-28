@@ -257,6 +257,44 @@ def full_autocorrelation(iq_wave):
 
     return np.abs(yx), lags
 
+#SCF
+def scf_tsm(samples, fs=48000, Nw=512, window=None, overlap=256, max_alpha=None, alpha_step_hz=5):
+    """Compute the Spectral Correlation Function (SCF) using a sliding-window cross-cyclic method (TSM)."""
+    """Fonction de corrélation spectrale (SCF) en utilisant une méthode de fenêtre glissante trans-cyclique (TSM)"""
+    if max_alpha is None:
+        max_alpha = fs / 2
+
+    alphas = np.arange(0, max_alpha + alpha_step_hz, alpha_step_hz)
+    N = len(samples)
+    step_size = Nw - overlap
+    num_windows = (N - overlap) // step_size
+
+    if window is None:
+        window = np.ones(Nw)
+    else:
+        window = df.get_window(window,Nw)
+
+    SCF = np.zeros((len(alphas), Nw), dtype=complex)
+
+    for ii, alpha in enumerate(alphas): # on boucle sur les fréquences cycliques
+        n = np.arange(N)
+        neg = samples * np.exp(-1j * 2 * np.pi * alpha / fs * n)
+        pos = samples * np.exp( 1j * 2 * np.pi * alpha / fs * n)
+
+        for i in range(num_windows):
+            idx_start = i * step_size
+            idx_end = idx_start + Nw
+            pos_slice = window * pos[idx_start:idx_end]
+            neg_slice = window * neg[idx_start:idx_end]
+            SCF[ii, :] += np.fft.fft(neg_slice) * np.conj(np.fft.fft(pos_slice))
+
+    SCF = np.fft.fftshift(SCF, axes=1)
+    SCF = np.abs(SCF)
+    SCF[0, :] = 0  # zero α=0 qui est la DSP
+
+    faxis = np.fft.fftshift(np.fft.fftfreq(Nw, d=1/fs))
+    return SCF, faxis, alphas
+
 ##
 # OFDM
 # Fonctions pour estimer les paramètres de modulation OFDM, basés sur le code Matlab de FX Socheleau - IMT Atlantique, 2020

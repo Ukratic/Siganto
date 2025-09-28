@@ -55,7 +55,7 @@ def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
     return freqs, np.array(times), 20 * np.log10(np.abs(stft_matrix))
 
 # DSP
-def compute_dsp(iq_wave, frame_rate, N, overlap=0.5, window_type='hann'):
+def compute_dsp(iq_wave, frame_rate, N=256, overlap=128, window_type='hann'):
     """Densité spectrale de puissance"""
     step_size = N - overlap  # match STFT
     num_windows = (len(iq_wave) - overlap) // step_size
@@ -79,7 +79,7 @@ def compute_dsp(iq_wave, frame_rate, N, overlap=0.5, window_type='hann'):
     return freqs, psd
 
 # Mesure de la largeur de bande
-def estimate_bandwidth(iq_wave, frame_rate, N, overlap=0.5, window_type='hann'):
+def estimate_bandwidth(iq_wave, frame_rate, N=256, overlap=128, window_type='hann'):
     """Estimation de BW à partir de la DSP"""
     freqs, dsp = compute_dsp(iq_wave, frame_rate, N, overlap, window_type)
     # DSP normalisée pour le seuil de la largeur de bande
