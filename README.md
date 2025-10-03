@@ -69,8 +69,8 @@ Overlap.
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.png" alt="4_4"/>
 - dPMR Constellation <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.png" alt="dPMR"/>
-- PSD of IS-95 (CDMA) <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="2G"/>
+- PSD of CIS-FTM4 <br>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="CIS-FTM4"/>
 - TETRA Symbol rate <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_5.png" alt="TETRA"/>
 - TETRAPOL Autocorrelation Function <br>
