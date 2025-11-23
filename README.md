@@ -26,7 +26,7 @@ Overlap.
 - Coarse doppler correction (essentially a diagonal frequency shift)
 - Down or Up Sampling (by ratio of an integer >1)
 - Cut part of the signal in time (enter a value or by cursor selection ; the latter only works reliably on spectrogram)
-- Modify parameters for transitions (phase, frequency) & persistence graphs
+- Modify parameters for transition smoothing (phase, frequency) & persistence bins
 - Save as a new .wav file
 #### 4. Filters
 - Low/High/Band Pass
@@ -36,9 +36,6 @@ Overlap.
 - Spectrogram (STFT & 3D)
 - Groups combining graphs on the same window
 #### 5. Power Metrics
-- Power Spectrum FFT (and variant)
-- Signal power FFT
-- Cyclospectrum FFT
 - PSD (and variant)
 - Time/Amplitude (IQ samples)
 #### 6. Frequency Metrics
@@ -48,10 +45,15 @@ Overlap.
 - Morlet CWT Scalogram
 #### 7. Phase Metrics
 - Constellation
-- Phase Spectrum
 - Phase Distribution
 - Phase Transitions
 - Eye Diagram
+#### 8. Symbol Rate Metrics
+- Envelope Specturm
+- Power Envelope Spectrum
+- Clock Transition Spectrum
+- Power Order (2&4) Spectrum
+- Cyclospectrum
 #### 8. Cyclostationarity Metrics
 - Autocorrelation function (fft-based fast variant or complete)
 - Spectral Correlation function
@@ -116,20 +118,24 @@ Overlap.
 -- Fixed MFSK demodulation.<br>
 -- SCF in Cyclostationarity Metrics.<br>
 
+- *V1.10* :<br>
+-- Fixed power scaling on various graphs. Normalized when exact values are not relevant.<br>
+-- Added Mueller & Muller CPM demod.<br>
+
 *Planned for later :*<br>
 -- More parameters available in GUI.<br>
--- Decoding tools.<br>
+-- Pre-decoding tools.<br>
 
 ### Using the app
-1. Simply clone/download the code in this repository to modify the code as needed for your purposes and run the main file *gui_main.py* to launch.<br>
-It is built on top of base Python (>=3.9 with Tkinter), Numpy, Matplotlib and Scipy. Sounddevice & tkinterdnd2 are optional.<br>
-Its low list of dependencies will hopefully allow most people to run it without too much hassle in university, industry or government environments (if not, use the executable to avoid dependencies altogether).
-The requirements.txt contains the earliest tested versions ; the .exe provided here was packaged with Python 3.13 and the latest stable versions of numpy, scipy and matplotlib so there should be no need to change your environment to run the code if you are using a Python version equal or above 3.9.<br>
+1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>
+Built on top of base Python (>=3.9 with Tkinter), Numpy, Matplotlib and Scipy. Sounddevice & tkinterdnd2 are optional.<br>
+Its low list of dependencies will hopefully allow most people to run it without too much hassle in university, industry or government environments.<br>
 
 2. Download and use the executable from the releases tab (language can still be swapped after launch).
 
 ### Supported file format :
 WAV 8-bit, 16-bit, 32-bit, 64-bit, encoding PCM & IEEE floats, IQ or real.<br>
+
 Scripts to convert from SigMF & MP3 are available in this repo.<br>
 SigMF conversion should work fine (though not maintained if the format evolves) but most of the metadata will be lost.
 MP3 conversion requires ffmpeg and might also be a little sketchy depending on how the file was recorded & encoded ; the result should be considered carefully.

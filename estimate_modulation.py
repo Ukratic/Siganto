@@ -10,8 +10,8 @@ import dsp_funcs as df
 # Fonctions mesures de la rapidité de modulation
 ##
 
-def power_spectrum_fft(iq_wave, frame_rate):
-    """FFT de puissance"""
+def power_spectrum_envelope(iq_wave, frame_rate):
+    """Spectre de puissance basé sur l'enveloppe du signal"""
     spectrum = np.abs(iq_wave) ** 2
     spectrum_fft = np.fft.fft(spectrum, len(iq_wave))
     spectrum_fft = np.fft.fftshift(spectrum_fft)
@@ -26,14 +26,36 @@ def power_spectrum_fft(iq_wave, frame_rate):
 
     return spectrum_fft, f, peak_freq
 
+def envelope_spectrum(iq_wave, frame_rate):
+    """Spectre de l'enveloppe du signal"""
+    envelope = np.abs(iq_wave)
+    envelope -= np.mean(envelope)  # retire la moyenne
+    N = len(envelope)
+    env_fft = np.fft.fft(envelope)
+    env_fft = np.fft.fftshift(env_fft)  # centre sur la fréquence zéro
+    env_freqs = np.fft.fftshift(np.fft.fftfreq(N, 1/frame_rate))
+    # Spectre de puissance de l'enveloppe
+    env_power = np.abs(env_fft)**2
+    discard_dc = np.abs(env_power)
+    zero_index = np.abs(env_freqs).argmin()
+    discard_dc[zero_index-10:zero_index+10] = 0
+    peak_freq_index = np.argmax(discard_dc)
+    peak_freq = env_freqs[peak_freq_index]
+    # pas de pic de fréquence si ce n'est pas clairement au-dessus du bruit
+    if np.max(env_power) < 2*np.mean(env_power):
+        peak_freq = 0
+
+    return env_power, env_freqs, peak_freq
+
+
 def mean_threshold_spectrum(iq_wave, frame_rate):
-    """FFT de puissance alternative"""
+    """Détection de la rapidité de modulation basée sur le seuillage moyen"""
     # seuil de la moyenne et calcul des pulses pour la détection de la fréquence de modulation
     midpoint = iq_wave > np.mean(iq_wave)
     pulse = np.diff(midpoint)**2
     clock = np.fft.fft(pulse, len(iq_wave))
     clock = np.fft.fftshift(clock)
-    # ensuite, idem que power_spectrum_fft
+    # ensuite, idem que power_spectrum_envelope
     f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave))
     discard_dc = np.abs(clock)
     zero_index = np.abs(f).argmin()
@@ -124,12 +146,19 @@ def cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window, frame_len=512, step
 ##
 
 # Spectre de persistance
-def persistance_spectrum(iq_wave, frame_rate, N, power_bins=50):
+def persistance_spectrum(iq_wave, frame_rate, N=256, power_bins=50, window_type='hann', overlap=128):
     """Spectre de persistance des fréquences"""
-    num_rows = len(iq_wave) // N
-    spectrogram = np.zeros((num_rows, N))
-    for i in range(num_rows):
-        spectrogram[i, :] = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(iq_wave[i * N:(i + 1) * N]))) ** 2)
+    step_size = N - overlap
+    num_windows = (len(iq_wave) - overlap) // step_size
+    spectrogram = np.zeros((num_windows, N))
+    window = df.get_window(window_type, N)
+    for i in range(num_windows):
+        start = i * step_size
+        end = start + N
+        segment = iq_wave[start:end] * window
+        fft_result = np.fft.fft(segment, N)
+        psd_segment = (np.abs(np.fft.fftshift(fft_result))**2) / (frame_rate * N)
+        spectrogram[i, :] = 10*np.log10(psd_segment)
     min_power = np.min(spectrogram)
     # Si min_power = -inf, remplacer par la valeur minimale (sinon erreur matplotlib)
     if min_power == -np.inf:

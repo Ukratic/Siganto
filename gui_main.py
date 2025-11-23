@@ -278,7 +278,7 @@ def plot_initial_graphs():
     ax[1].plot(f_centered, Pxx_shifted)
     ax[1].set_xlim(-frame_rate/2, frame_rate/2)
     ax[1].set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax[1].set_ylabel("Amplitude")
+    ax[1].set_ylabel(lang["power_scale"])
     ax[1].axvline(x=fmax, color='r', linestyle='--')
     ax[1].axvline(x=fmin, color='r', linestyle='--')
     if debug is True:
@@ -343,12 +343,13 @@ def plot_other_graphs():
 
     # DSP avec max
     wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
+    wav_mag = wav_mag / np.max(wav_mag)
     f = np.linspace(frame_rate / -2, frame_rate / 2, len(iq_wave)) # freq en Hz
     line_spectrum, = ax[2].plot(f, wav_mag)
     ax[2].plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # point max
     ax[2].grid()
     ax[2].set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax[2].set_ylabel("Amplitude")
+    ax[2].set_ylabel(lang["norm_power"])
 
     # Label pour afficher l'offset FC
     freq_label = tk.Label(plot_frame, text=f"{lang['offset_freq']}: {fcenter} Hz")
@@ -368,6 +369,7 @@ def plot_other_graphs():
         line_constellation.set_offsets(np.c_[np.real(iq_constel), np.imag(iq_constel)])
         # Màj DSP
         wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
+        wav_mag = wav_mag / np.max(wav_mag)
         line_spectrum.set_ydata(wav_mag)
 
         canvas.draw()
@@ -438,12 +440,13 @@ def plot_3d_spectrogram():
         return
     # Génération du spectrogramme 3D 
     freqs, times, spectrogram = mg.compute_spectrogram(iq_wave, frame_rate, N, window_func=window_choice)
+    spectrogram = spectrogram / np.max(spectrogram)  # normalisation
     X, Y = np.meshgrid(freqs, times)
     ax = plt.subplot(projection='3d')
     ax.plot_surface(X, Y, spectrogram, cmap=cm.coolwarm)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(f"{lang['time_xy']} [s]")
-    ax.set_zlabel("Amplitude")
+    ax.set_zlabel(lang["norm_amplitude"])
     ax.set_title(f"{lang['window']} {window_choice}")
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
@@ -466,9 +469,10 @@ def time_amplitude():
         return
     ax = plt.subplot()
     time = np.arange(len(iq_wave)) / frame_rate
-    ax.plot(time, iq_wave)
+    iq_norm = iq_wave / np.max(np.abs(iq_wave))
+    ax.plot(time, iq_norm)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
-    ax.set_ylabel("Amplitude")
+    ax.set_ylabel(lang["norm_amplitude"])
     ax.grid(True)
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
@@ -476,7 +480,7 @@ def time_amplitude():
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del canvas, time
+    del canvas, time, iq_norm
 
 def spectre_persistance():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
@@ -489,10 +493,10 @@ def spectre_persistance():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    f, min_power, max_power, persistence = em.persistance_spectrum(iq_wave, frame_rate, N, persistance_bins)
-    ax.imshow(persistence.T, aspect='auto', extent=[f[0], f[-1], min_power, max_power], origin='lower', cmap='jet')
+    f, min_power, max_power, persistence = em.persistance_spectrum(iq_wave, frame_rate, N, persistance_bins, window_choice, overlap)
+    ax.imshow(persistence.T, aspect='auto', extent=[f[0], f[-1], 0, 1], origin='lower', cmap='jet')
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_ylabel("Amplitude")
+    ax.set_ylabel(lang["norm_power"])
     ax.grid(True)
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
@@ -600,18 +604,43 @@ def display_frq_info():
     wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
     f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave))
     f_pmax = f[np.argmax(wav_mag)]
-    f_pmin = f[np.argmin(wav_mag)] 
-    max_lvl = 10*np.log10(np.max(np.abs(iq_wave)**2))
-    low_lvl = 10*np.log10(np.min(np.abs(iq_wave)**2))
-    mean_lvl = 10*np.log10(np.mean(np.abs(iq_wave)**2))
+    f_pmin = f[np.argmin(wav_mag)]
+    _, psd = mg.compute_dsp(iq_wave, frame_rate, N, overlap, window_choice)
+    max_lvl = 10*np.log10(np.max(psd))
+    low_lvl = 10*np.log10(np.min(psd))
+    mean_lvl = 10*np.log10(np.mean(psd))
     estim_speed_2 = round(np.abs(em.mean_threshold_spectrum(iq_wave, frame_rate)[2]),2)
-    estim_speed = round(np.abs(em.power_spectrum_fft(iq_wave, frame_rate)[2]),2)
+    estim_speed = round(np.abs(em.power_spectrum_envelope(iq_wave, frame_rate)[2]),2)
     _,_,_, peak_squared_freq, peak_quartic_freq = em.power_series(iq_wave, frame_rate)
     estim_speed_3 = [round(abs(peak_squared_freq),2),round(abs(peak_quartic_freq),2)]
     _, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
     freq_diff /= np.max(np.abs(freq_diff))
     estim_speed_4 = round(float(dm.estimate_baud_rate(freq_diff, frame_rate)),2)
+    estim_speed_5 = round(np.abs(em.envelope_spectrum(iq_wave, frame_rate)[2]),2)
     acf_peak = round(np.abs(em.autocorrelation_peak(iq_wave, frame_rate, min_distance=25)[1]),2)
+
+    # estimation de rapidité de modulation via différentes méthodes et indicateur de confiance
+    confidence = 1
+    if abs(estim_speed - estim_speed_4)/estim_speed_4 < 0.1:
+        confidence +=1
+    if abs(estim_speed_2 - estim_speed_4)/estim_speed_4 < 0.1:
+        confidence +=1
+    if abs(estim_speed_3[0]*2 - estim_speed_4)/estim_speed_4 < 0.1:
+        confidence +=1
+    if abs(estim_speed_3[1]*2 - estim_speed_4)/estim_speed_4 < 0.1:
+        confidence +=1
+    if abs(estim_speed_5 - estim_speed_4)/estim_speed_4 < 0.1:
+        confidence +=1
+
+    if confidence < 2:
+        confidence_level = lang['low_confidence']
+        estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
+    elif confidence >= 2 and confidence < 3:
+        confidence_level = lang['medium_confidence']
+        estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
+    elif confidence >= 3:
+        confidence_level = lang['high_confidence']
+        estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
 
     popup = tk.Toplevel()
     popup.title(lang["frq_info"])
@@ -620,10 +649,7 @@ def display_frq_info():
                     {lang['high_level']} {max_lvl:.2f}. {lang['low_level']} {low_lvl:.2f}.\n \
                     {lang['mean_level']} {mean_lvl:.2f} dB ").pack()
     tk.Label(popup, text=f"{lang['estim_bw']} {round(bw,2)} Hz").pack()
-    tk.Label(popup, text=f"{lang['estim_speed']} {estim_speed} Bds\n \
-                    {lang['estim_speed_2']} {estim_speed_2} Bds\n \
-                    {lang['estim_speed_3']} {estim_speed_3[0]*2} / {estim_speed_3[1]*2} Bds\n \
-                    {lang['estim_speed_4']} {estim_speed_4} Bds").pack()
+    tk.Label(popup, text=f"{lang['estim_speed']} {estim_speed_ag}").pack()
     tk.Label(popup, text=f"{lang['acf_peak_txt']} {acf_peak} ms" ).pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
 
@@ -637,8 +663,10 @@ def display_frq_info():
         print("Rapidité de modulation estimée avec la fonction mts: ", estim_speed_2, " Bauds")
         print("Rapidité de modulation avec la FFT de puissance classique: ", estim_speed, " Bauds")
         print("Rapidité de modulation estimée par signal puissance: ", estim_speed_3[0]*2, "/", estim_speed_3[1]*2, "Bauds")
+        print("Rapidité de modulation estimée par transitions de fréquence: ", estim_speed_4, " Bauds")
+        print("Confiance dans l'estimation de rapidité de modulation: ", confidence, "/5")
         print("Autocorrélation estimée: ", acf_peak, " ms")
-    del _,estim_speed,estim_speed_2, wav_mag
+    del _,estim_speed,estim_speed_2, wav_mag, f, f_pmax, f_pmin, max_lvl, low_lvl, mean_lvl, freq_diff, acf_peak
 
 # Affichage des informations du fichier : nom, encodage, durée, fréquence d'échantillonnage, taille de la fenêtre FFT
 def display_file_info():
@@ -750,7 +778,9 @@ def mean_filter():
     mean_filter = tk.StringVar()
     mean_filter.set(lang["not_apply"])
     # Afficher sur la popup la valeur de la variable
-    iq_floor = 10*np.log10(np.mean(np.abs(iq_wave)**2))
+    _, psd = mg.compute_dsp(iq_wave, frame_rate, N, overlap, window_choice)
+    iq_floor = 10*np.log10(np.mean(psd))
+    iq_wave_db = 10*np.log10(np.abs(iq_wave)**2 / (frame_rate * N))
     tk.Label(popup, text=lang["mean_level"] + str(iq_floor)).pack()
     tk.Radiobutton(popup, text=lang["not_apply"], variable=mean_filter, value=lang["not_apply"]).pack()
     tk.Radiobutton(popup, text=lang["apply_mean"], variable=mean_filter, value=lang["apply_mean"]).pack()
@@ -759,7 +789,7 @@ def mean_filter():
     popup.wait_window()
     if mean_filter.get() == lang["def_level"]:
         iq_floor = float(tk.simpledialog.askstring(lang["level"], lang["enter_level"], parent=root))
-        iq_wave = np.where(10*np.log10(np.abs(iq_wave)**2) < iq_floor, 0, iq_wave)
+        iq_wave = np.where(iq_wave_db < iq_floor, 0, iq_wave)
         if iq_floor is None:
             if debug is True:
                 print("Seuil de moyennage non défini")
@@ -767,7 +797,7 @@ def mean_filter():
         if debug is True:
             print("Signal moyenné avec un seuil de ", iq_floor, " dB")
     elif mean_filter.get() == lang["apply_mean"]:
-        iq_wave = np.where(10*np.log10(np.abs(iq_wave)**2) < iq_floor, 0, iq_wave)
+        iq_wave = np.where(iq_wave_db < iq_floor, 0, iq_wave)
         if debug is True:
             print("Signal moyenné avec un seuil de ", iq_floor, " dB")
     else:
@@ -775,6 +805,7 @@ def mean_filter():
     
     print(lang["mean"])
     plot_initial_graphs()
+    del _, psd, iq_floor, iq_wave_db
 
 def downsample_signal():
     # sous-échantillonnage
@@ -891,7 +922,7 @@ def apply_doppler_correction():
 
 # Fonctions de mesure de la rapidité de modulation
 def psf():
-    # Mesure de la rapidité de modulation par la FFT de puissance. Polyvalente.
+    # Mesure de la rapidité de modulation par la spectre d'enveloppe du puissance. Polyvalente.
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -900,15 +931,18 @@ def psf():
     if not filepath:
         print(lang["no_file"])
         return
-    clock, f, peak_freq = em.power_spectrum_fft(iq_wave, frame_rate)
+    clock, f, peak_freq = em.power_spectrum_envelope(iq_wave, frame_rate)
+    clock = clock / np.max(clock)
     ax = plt.subplot()
     ax.plot(f,np.abs(clock))
     if abs(peak_freq) > 25:
         ax.axvline(x=-peak_freq, color='r', linestyle='--')
         ax.axvline(x=peak_freq, color='r', linestyle='--')
         ax.set_title(f"{lang['estim_peak']} {round(peak_freq,2)} Hz")
+    else:
+        ax.set_title(lang['estim_failed'])
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_ylabel(lang["mag"])
+    ax.set_ylabel(lang["norm_power"])
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -928,6 +962,7 @@ def mts():
         print(lang["no_file"])
         return
     clock, f, peak_freq = em.mean_threshold_spectrum(iq_wave, frame_rate)
+    clock = clock / np.max(clock)
     ax = plt.subplot()
     ax.plot(f,np.abs(clock))
     # ligne en rouge du pic de puissance estimé sur le graphe à -peak_freq et peak_freq, sauf si < 25 Hz
@@ -938,7 +973,7 @@ def mts():
     else:
         ax.set_title(lang['estim_failed'])
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_ylabel(lang["mag"])
+    ax.set_ylabel(lang["norm_power"])
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -948,7 +983,7 @@ def mts():
     del clock, f, peak_freq, canvas
 
 def pseries():
-    # mesure de la rapidité de modulation par la série de puissance, efficace sur les signaux de modulation d'amplitude et de fréquence
+    # mesure de la rapidité de modulation par les ordres de puissance, efficace sur les signaux de modulation d'amplitude et de fréquence
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -963,8 +998,10 @@ def pseries():
     a1 = fig.add_subplot(spec[1, :])
     ax = (a0, a1)
     f, squared, quartic, peak_squared_freq, peak_quartic_freq = em.power_series(iq_wave, frame_rate)
+    squared = squared / np.max(squared)
+    quartic = quartic / np.max(quartic)
     ax[0].plot(f, squared)
-    ax[0].set_ylabel(f"{lang['mag']} ^2")
+    ax[0].set_ylabel(f"{lang["norm_power"]} ^2")
     if abs(peak_squared_freq) > 25:
         ax[0].axvline(x=-peak_squared_freq, color='r', linestyle='--')
         ax[0].axvline(x=peak_squared_freq, color='r', linestyle='--')
@@ -972,7 +1009,7 @@ def pseries():
         if debug is True:
             print("Ecart estimé : ", round(np.abs(peak_squared_freq),2))
     ax[1].plot(f, quartic)
-    ax[1].set_ylabel(f"{lang['mag']} ^4")
+    ax[1].set_ylabel(f"{lang["norm_power"]} ^4")
     ax[1].set_xlabel(f"{lang['freq_xy']} [Hz]")
     if abs(peak_quartic_freq) > 25:
         ax[1].axvline(x=-peak_quartic_freq, color='r', linestyle='--')
@@ -1000,6 +1037,7 @@ def cyclospectrum():
         return
     f, cyclic_corr_avg, peak_freq = em.cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window=window_choice, frame_len=N, step=overlap)
     f = np.linspace(frame_rate/-2, frame_rate/2, len(cyclic_corr_avg))
+    cyclic_corr_avg = cyclic_corr_avg / np.max(cyclic_corr_avg)
     ax = plt.subplot()
     ax.plot(f,cyclic_corr_avg)
     # on retire les pics de puissance autour de 0 Hz pour déterminer la rapidité de modulation
@@ -1011,7 +1049,7 @@ def cyclospectrum():
     else:
         ax.set_title(lang['estim_failed'])
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_ylabel(lang["mag"])
+    ax.set_ylabel(lang["norm_power"])
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -1019,6 +1057,37 @@ def cyclospectrum():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     del cyclic_corr_avg, f, peak_freq, canvas
+
+def envelope_spectrum():
+    # Spectre de l'enveloppe du signal
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["envelope_spectrum"])
+    print(lang["envelope_spectrum"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    envelope, f, peak_freq = em.envelope_spectrum(iq_wave, frame_rate)
+    envelope = envelope / np.max(envelope)
+    print(peak_freq)
+    ax = plt.subplot()
+    ax.plot(f,envelope)
+    if abs(peak_freq) > 25:
+        ax.axvline(x=-peak_freq, color='r', linestyle='--')
+        ax.axvline(x=peak_freq, color='r', linestyle='--')
+        ax.set_title(f"{lang['estim_peak']} {round(peak_freq,2)} Hz")
+    else:
+        ax.set_title(lang['estim_failed'])
+    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
+    ax.set_ylabel(lang["norm_power"])
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del envelope, f, peak_freq, canvas
 
 def dsp():
     # affichage de la densité spectrale de puissance et de la bande passante estimée
@@ -1030,18 +1099,12 @@ def dsp():
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
     bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N,overlap,window_choice)
-    line, = ax.plot(f, Pxx)
-    # Suppression du segment le plus long qui affiche une ligne inutile
-    # Cherche le plus long segment
-    distances = np.sqrt(np.diff(f)**2 + np.diff(Pxx)**2)
-    longest_segment_index = np.argmax(distances)
-    # Coordonnées du segment le plus long
-    x1, y1 = f[longest_segment_index], Pxx[longest_segment_index]
-    x2, y2 = f[longest_segment_index + 1], Pxx[longest_segment_index + 1]
-    # Retire le segment le plus long du graphe en le remplaçant par une ligne blanche
-    ax.plot([x1, x2], [y1, y2], color="white", linewidth=3) # width = 3 pour être sûr de bien couvrir le segment même si la ligne est inclinée
+    Pxx_shifted = np.fft.fftshift(Pxx) 
+    f_centered = np.linspace(-frame_rate/2, frame_rate/2, len(f)) # pas de point en dehors de la bande passante, donc évite les artefacts de bords
+    ax.plot(f_centered, Pxx_shifted)
+    ax.set_xlim(-frame_rate/2, frame_rate/2)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_ylabel("Amplitude")
+    ax.set_ylabel(lang["power_scale"])
     ax.axvline(x=fmax, color='r', linestyle='--')
     ax.axvline(x=fmin, color='r', linestyle='--')
     ax.set_title(f"{lang['bandwidth']} : {round(bw,2)} Hz")
@@ -1055,7 +1118,7 @@ def dsp():
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del fmax, fmin, canvas, f, Pxx, line, distances, longest_segment_index, x1, y1, x2, y2
+    del fmax, fmin, canvas, f, Pxx
 
 # fonc dsp max
 def dsp_max():
@@ -1069,12 +1132,13 @@ def dsp_max():
         return
     ax = plt.subplot()
     wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
+    wav_mag = wav_mag / np.max(wav_mag)
     f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave)) # frq en Hz
     ax.plot(f, wav_mag)
     ax.plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # show max
     ax.grid()
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_ylabel("Amplitude")
+    ax.set_ylabel(lang["norm_power"])
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -1285,27 +1349,6 @@ def frequency_cumulative():
     canvas.draw()
     del hist, bins, canvas
 
-def phase_spectrum():
-    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    clear_plot()
-    fig = plt.figure()
-    fig.suptitle(lang["phase_spectrum"])
-    print(lang["phase_spectrum"])
-    if not filepath:
-        print(lang["no_file"])
-        return
-    ax = plt.subplot()
-    ax.phase_spectrum(iq_wave, Fs=frame_rate)
-    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_ylabel(lang["insta_phase"])
-
-    canvas = FigureCanvasTkAgg(fig, plot_frame)
-    toolbar = NavigationToolbar2Tk(canvas, root)
-    toolbar.update()
-    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-    canvas.draw()
-    del canvas
-
 # params pour les fonctions de différence de phase et de fréquence
 def set_diff_params():
     global diff_window
@@ -1336,11 +1379,12 @@ def morlet_wavelet():
     coefs, center_freqs = df.morlet_cwt(iq_wave, fs=frame_rate)
     times = np.arange(coefs.shape[1]) / frame_rate
     power = np.abs(coefs)
+    power = power / np.max(power)
     im = ax.imshow(power, extent=[times[0], times[-1], center_freqs[0], center_freqs[-1]], aspect='auto', cmap='jet', origin='lower')
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel("Morlet  freq [π rad/sample]")
     cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label("Magnitude")
+    cbar.set_label(lang["norm_power"])
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
@@ -1442,18 +1486,11 @@ def ofdm_results():
     fig = plt.figure()
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
-    line, = ax.plot(f, Pxx)
-    # Suppression du segment le plus long qui affiche une ligne inutile
-    # Cherche le plus long segment
-    distances = np.sqrt(np.diff(f)**2 + np.diff(Pxx)**2)
-    longest_segment_index = np.argmax(distances)
-    # Coordonnées du segment le plus long
-    x1, y1 = f[longest_segment_index], Pxx[longest_segment_index]
-    x2, y2 = f[longest_segment_index + 1], Pxx[longest_segment_index + 1]
-    # Retire le segment le plus long du graphe en le remplaçant par une ligne blanche
-    ax.plot([x1, x2], [y1, y2], color="white", linewidth=3) # width = 3 pour être sûr de bien couvrir le segment même si la ligne est inclinée
+    Pxx_shifted = np.fft.fftshift(Pxx) 
+    f_centered = np.linspace(-frame_rate/2, frame_rate/2, len(f)) # même échelle x que le spectrogramme
+    ax.plot(f_centered, Pxx_shifted)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
-    ax.set_ylabel("Amplitude")
+    ax.set_ylabel(lang["power_scale"])
     fmin, fmax = -new_bw/2, new_bw/2
     ax.axvline(x=fmax, color='r', linestyle='--')
     ax.axvline(x=fmin, color='r', linestyle='--')
@@ -1465,7 +1502,7 @@ def ofdm_results():
     toolbar.update()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
-    del fmax, fmin, f, Pxx, alpha_0, popup, canvas, distances, longest_segment_index, x1, y1, x2, y2
+    del fmax, fmin, f, Pxx, alpha_0, popup, canvas
 
 ## Fonctions de gestion des curseurs
 # Calcule distance entre 2 points
@@ -2249,13 +2286,20 @@ def eye_diagram():
     elif baud_rate == 0:
         print("Pas de rapidité de modulation définie. Essai aveugle")
         symbol_rate = None
+        try:
+            freq_diff = em.frequency_transitions(iq_wave, frame_rate, window_size=diff_window, window_type=window_choice)[1]
+            symbol_rate = dm.estimate_baud_rate(freq_diff, frame_rate, target_rate=baud_rate, precision=0.9, debug=debug)
+            if symbol_rate is None or symbol_rate <= 0:
+                symbol_rate = baud_rate
+            if debug is True:
+                print(f"Rapidité estimée pour diagramme de l'oeil: {symbol_rate} bauds")
+        except Exception as e:
+            if debug is True:
+                print(f"Echec de l'estimation de la rapidité: {e}")
+                return
+    else:
+        symbol_rate = baud_rate
     try:
-        freq_diff = em.frequency_transitions(iq_wave, frame_rate, window_size=diff_window, window_type=window_choice)[1]
-        symbol_rate = dm.estimate_baud_rate(freq_diff, frame_rate, target_rate=baud_rate, precision=0.9, debug=debug)
-        if symbol_rate is None or symbol_rate <= 0:
-            symbol_rate = baud_rate
-        if debug is True:
-            print(f"Rapidité estimée pour diagramme de l'oeil: {symbol_rate} bauds")
         channel = "I" # pour l'instant, on ne fait que le canal I
         time, traces, metrics = dm.eye_diagram_with_metrics(iq_wave, fs=frame_rate, baud_rate=symbol_rate, channel=channel, num_traces=500)
         if debug is True:
@@ -2426,6 +2470,7 @@ def load_lang_changes():
     filter_menu = tk.Menu(menu_bar, tearoff=0)
     power_menu = tk.Menu(menu_bar, tearoff=0)
     diff_menu = tk.Menu(menu_bar, tearoff=0)
+    speed_menu = tk.Menu(menu_bar, tearoff=0)
     acf_menu = tk.Menu(menu_bar, tearoff=0)
     ofdm_menu = tk.Menu(menu_bar, tearoff=0)
     freq_menu = tk.Menu(menu_bar, tearoff=0)
@@ -2439,6 +2484,7 @@ def load_lang_changes():
     menu_bar.add_cascade(label=lang["power_estimate"], menu=power_menu)
     menu_bar.add_cascade(label=lang["freq_estimate"], menu=freq_menu)
     menu_bar.add_cascade(label=lang["phase_estimate"], menu=diff_menu)
+    menu_bar.add_cascade(label=lang["speed_estimate"], menu=speed_menu)
     menu_bar.add_cascade(label=lang["cyclo_estimate"], menu=acf_menu)
     menu_bar.add_cascade(label=lang["ofdm"], menu=ofdm_menu)
     menu_bar.add_cascade(label=lang["demod"], menu=demod_menu)
@@ -2506,16 +2552,11 @@ def load_lang_changes():
     filter_menu.add_command(label=lang["matched_filter"], command=apply_matched_filter)
     # Analyse du signal
     # Puissance
-    power_menu.add_command(label=lang["psf"], command=psf)
-    power_menu.add_command(label=lang["mts"], command=mts)
-    power_menu.add_command(label=lang["pseries"], command=pseries)
-    power_menu.add_command(label=lang["cyclospectrum"], command=cyclospectrum)
     power_menu.add_command(label=lang["dsp"], command=dsp)
     power_menu.add_command(label=lang["dsp_max"], command=dsp_max)
     power_menu.add_command(label=lang["time_amp"], command=time_amplitude)
     # Phase
     diff_menu.add_command(label=lang["constellation"], command=constellation)
-    diff_menu.add_command(label=lang["phase_spectrum"], command=phase_spectrum)
     diff_menu.add_command(label=lang["distrib_phase"], command=phase_cumulative)
     diff_menu.add_command(label=lang["diff_phase"], command=phase_difference)
     diff_menu.add_command(label=lang["eye_diagram"], command=eye_diagram)
@@ -2524,6 +2565,12 @@ def load_lang_changes():
     freq_menu.add_command(label=lang["distrib_freq"], command=frequency_cumulative)
     freq_menu.add_command(label=lang["persist_spectrum"], command=spectre_persistance)
     freq_menu.add_command(label=lang["scalogram"], command=morlet_wavelet)
+    # Rapidité de modulation
+    speed_menu.add_command(label=lang["envelope_spectrum"], command=envelope_spectrum)
+    speed_menu.add_command(label=lang["psf"], command=psf)
+    speed_menu.add_command(label=lang["mts"], command=mts)
+    speed_menu.add_command(label=lang["pseries"], command=pseries)
+    speed_menu.add_command(label=lang["cyclospectrum"], command=cyclospectrum)
     # ACF
     acf_menu.add_command(label=lang["autocorr"], command=autocorr)
     acf_menu.add_command(label=lang["autocorr_full"], command=autocorr_full)

@@ -75,6 +75,7 @@ def compute_dsp(iq_wave, frame_rate, N=256, overlap=128, window_type='hann'):
     psd /= (frame_rate * N)
     # Freq bins
     freqs = np.fft.fftfreq(N, d=1/frame_rate)
+    psd /= np.sum(window**2)  # Correction fenêtrage
 
     return freqs, psd
 
@@ -92,4 +93,4 @@ def estimate_bandwidth(iq_wave, frame_rate, N=256, overlap=128, window_type='han
     max_freq = max(significant_freqs)
     bandwidth = max_freq - min_freq
 
-    return bandwidth, min_freq, max_freq, freqs, 20*np.log10(dsp)
+    return bandwidth, min_freq, max_freq, freqs, 10*np.log10(dsp)
