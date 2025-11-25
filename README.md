@@ -54,16 +54,16 @@ Overlap.
 - Clock Transition Spectrum
 - Power Order (2&4) Spectrum
 - Cyclospectrum
-#### 8. Cyclostationarity Metrics
+#### 9. Cyclostationarity Metrics
 - Autocorrelation function (fft-based fast variant or complete)
 - Spectral Correlation function
-#### 9. OFDM Metrics
+#### 10. OFDM Metrics
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
-#### 10. Demodulation
+#### 11. Demodulation
 - 2 or 4 CPM/FSK & PSK Demodulation (with optional baud rate estimation)
 - AM & FM Demodulation (visual output and result signal saved for playback or further analysis)
 - MFSK Demodulation (2 methods : tone detection or from smoothed frequency transitions)
-#### 11. Audio
+#### 12. Audio
 - Audio playback (you may need to choose the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded)
 
 ### Examples :
@@ -91,7 +91,7 @@ Overlap.
 - *V1.06* : <br>
 -- Options for the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top, Rectangular.<br>
 -- Dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal in most cases.<br>
--- Arrows for frequency fine-tuning (1Hz step). Only on Spectrogram/Constellation group for now.<br> 
+-- Frequency fine-tuning (1Hz or 0.01Hz step) on the Spectrogram/Constellation group. Left/right arrows on keyboard for 1Hz step, clickable GUI arrows for 0.01Hz step. <br> 
 -- 2 & 4 FSK demodulation.<br>
 -- Bug fixes on existing features.<br>
 
@@ -110,7 +110,7 @@ Overlap.
 - *V1.09* :<br>
 -- Windowing options also used on PSD, phase & frequency transitions (previously only spectrogram). <br>
 -- Streamlining filtering options and added Matched Filter.<br>
--- Cyclospectrum added to Power Metrics. Expanded symbol rate estimation in the information window.<br>
+-- Added Cyclospectrum. Tweaked symbol rate estimation in the information window.<br>
 -- Drag & drop files instead of opening a file dialog (optional feature adding the tkinterdnd2 library as a dependency).<br>
 -- Eye Diagram added to Phase Metrics.<br>
 -- Morlet CWT Scalogram added to Frequency Metrics.<br>
@@ -120,7 +120,9 @@ Overlap.
 
 - *V1.10* :<br>
 -- Fixed power scaling on various graphs. Normalized when exact values are not relevant.<br>
--- Added Mueller & Muller CPM demod.<br>
+-- Added resampling options : Polyphase & CIC. <br>
+-- Added Envelope Spectrum & renamed some symbol rate graphs with a clearer title.<br>
+-- Automatic symbol rate estimation now has a confidence level.<br>
 
 *Planned for later :*<br>
 -- More parameters available in GUI.<br>

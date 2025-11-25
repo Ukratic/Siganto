@@ -138,9 +138,6 @@ def cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window, frame_len=512, step
 
     return alpha_list, cyclic_corr_avg, peak_freq
 
-# call :
-# cyclic_corr_avg = cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window, frame_len=N, step=overlap)
-
 ##
 # Fonctions de mesures temporelles
 ##

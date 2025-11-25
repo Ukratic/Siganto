@@ -1,6 +1,6 @@
 """Fonctions de base pour filtrer, sous-échantillonner, sur-échantillonner, mesurer la largeur de bande"""
 
-from scipy.signal import butter, filtfilt, resample, medfilt, wiener, firwin, lfilter, convolve
+from scipy.signal import butter, filtfilt, resample, medfilt, wiener, firwin, lfilter, convolve, resample_poly
 import numpy as np
 
 def bandpass_filter(iq_wave, lowcut, highcut, frame_rate, order=4):
@@ -49,8 +49,9 @@ def downsample(iq_wave, frame_rate, decimation_factor):
 
     return downsampled_signal, new_frame_rate
 
+# méthode de suréchantillonnage de base pour utilisation dans l'interface graphique
 def upsample(iq_wave, frame_rate, oversampling_factor):
-    """Suréchantillonnage, basé sur scipy.signal.resample"""
+    """Suréchantillonnage FFT : zéro-padding dans le domaine fréquentiel"""
     # facteur de suréchantillonnage
     oversampling_factor = int(oversampling_factor)
     if oversampling_factor < 1:
@@ -62,6 +63,29 @@ def upsample(iq_wave, frame_rate, oversampling_factor):
 
     return upsampled_signal, new_frame_rate
 
+# méthode de rééchantillonnage par interpolation polyphasique : plus précise et efficace, mais plus complexe
+def resample_polyphase(iq_wave, frame_rate, fs_new):
+    """Resampling par interpolation polyphasique"""
+    gcd = np.gcd(frame_rate, fs_new)
+    up = fs_new // gcd
+    down = frame_rate // gcd
+    resampled_signal = resample_poly(iq_wave, up, down)
+
+    return resampled_signal, fs_new
+
+# méthode de rééchantillonnage par filtre CIC (Cascaded Integrator-Comb) : simple (cheap computing) mais moins précise. Inutile pour appli graphique avec traitement différé.
+def resample_cic(iq_wave, frame_rate, fs_new):
+    """Resampling par filtre CIC (Cascaded Integrator-Comb)"""
+    ratio = fs_new / frame_rate
+    n_out = int(len(iq_wave) * ratio)
+    t = np.arange(n_out) / ratio
+    i0 = np.floor(t).astype(int)
+    i1 = np.minimum(i0 + 1, len(iq_wave) - 1)
+    frac = t - i0
+    resampled_signal = (1 - frac) * iq_wave[i0] + frac * iq_wave[i1]
+
+    return resampled_signal, fs_new
+
 # Essai de quelques fonctions de filtrage supplémentaires
 def median_filter(iq_wave, kernel_size=3):
     """Applique un filtre médian pour réduire le bruit"""
@@ -70,6 +94,7 @@ def median_filter(iq_wave, kernel_size=3):
     real_part_filtered = medfilt(np.real(iq_wave), kernel_size=kernel_size)
     imag_part_filtered = medfilt(np.imag(iq_wave), kernel_size=kernel_size)
     filtered_complex_data = real_part_filtered + 1j * imag_part_filtered
+
     return filtered_complex_data
 
 def moving_average(iq_wave, window_size):
@@ -77,6 +102,7 @@ def moving_average(iq_wave, window_size):
     if window_size < 1 or not isinstance(window_size, int):
         raise ValueError("La taille de la fenêtre doit être un entier positif.")
     kernel = np.ones(window_size) / window_size
+
     return np.convolve(iq_wave, kernel, mode='same')
 
 def wiener_filter(iq_wave, size=None, noise=None):
@@ -85,6 +111,7 @@ def wiener_filter(iq_wave, size=None, noise=None):
         raise ValueError("Size doit être un entier positif.")
     if noise is not None and (not isinstance(noise, (int, float)) or noise < 0):
         raise ValueError("noise doit être un nombre positif ou zéro.")
+    
     return wiener(iq_wave, mysize=size, noise=noise)
 
 def fir_filter(iq_wave, fs, cutoff, filter_type='lowpass', numtaps=101):
@@ -101,6 +128,7 @@ def fir_filter(iq_wave, fs, cutoff, filter_type='lowpass', numtaps=101):
     nyq = 0.5 * fs
     norm_cutoff = cutoff / nyq if np.isscalar(cutoff) else [c / nyq for c in cutoff]
     taps = firwin(numtaps, norm_cutoff, pass_zero=filter_type)
+
     return lfilter(taps, 1.0, iq_wave)
 
 def matched_filter(iq_wave, frame_rate, symbol_rate, factor=0.5, pulse_shape='rectangular'):
@@ -108,44 +136,39 @@ def matched_filter(iq_wave, frame_rate, symbol_rate, factor=0.5, pulse_shape='re
     sps = int(round(frame_rate / symbol_rate))
     if sps < 1:
         raise ValueError("Le taux d'échantillonnage par symbole (sps) doit être au moins 1.")
-    # Calcul de la longueur du noyau en fonction du facteur
+    # Calcul de la taille du noyau en fonction du facteur
     if pulse_shape == 'rectangular':
         kernel = np.ones(sps)
     elif pulse_shape == 'gaussian':
-        BT = factor
-        t = np.arange(-3*sps, 3*sps+1)
-        alpha = np.sqrt(np.log(2)) / (BT * sps)
+        t = np.arange(-5*sps, 5*sps+1)
+        alpha = np.sqrt(np.log(2)) / (factor * sps)
         kernel = np.exp(-0.5 * (alpha * t)**2)
     elif pulse_shape == 'raised_cosine':
-        # RC ou RRC
-        beta = factor
-        span = 6  # nombre de symboles
-        t = np.arange(-span*sps, span*sps+1, dtype=float) / sps
-        kernel = np.sinc(t)
-        kernel *= np.cos(np.pi*beta*t) / (1 - (2*beta*t)**2 + 1e-12)  # formule RC
-    elif pulse_shape == 'root_raised_cosine':
-        beta = factor
         span = 6
         t = np.arange(-span*sps, span*sps+1, dtype=float) / sps
-        numerator = (np.sin(np.pi*t*(1-beta)) +
-                     4*beta*t*np.cos(np.pi*t*(1+beta)))
-        denominator = (np.pi*t*(1-(4*beta*t)**2))
+        kernel = np.sinc(t)
+        kernel *= np.cos(np.pi*factor*t) / (1 - (2*factor*t)**2 + 1e-12)
+    elif pulse_shape == 'root_raised_cosine': # à évaluer
+        span = 6
+        t = np.arange(-span*sps, span*sps+1, dtype=float) / sps
+        numerator = (np.sin(np.pi*t*(1-factor)) +
+                     4*factor*t*np.cos(np.pi*t*(1+factor)))
+        denominator = (np.pi*t*(1-(4*factor*t)**2))
         # évite la division par zéro
         mask = ~np.isclose(denominator, 0.0)
         kernel = np.zeros_like(t)
         kernel[mask] = numerator[mask] / denominator[mask]
-
         # Gestion des singularités
-        kernel[np.isclose(t, 0.0)] = 1.0 - beta + 4*beta/np.pi
-        kernel[np.isclose(np.abs(t), 1/(4*beta))] = (beta/np.sqrt(2)) * (
-            ((1+2/np.pi)*np.sin(np.pi/(4*beta))) +
-            ((1-2/np.pi)*np.cos(np.pi/(4*beta))))
+        kernel[np.isclose(t, 0.0)] = 1.0 - factor + 4*factor/np.pi
+        kernel[np.isclose(np.abs(t), 1/(4*factor))] = (factor/np.sqrt(2)) * (
+            ((1+2/np.pi)*np.sin(np.pi/(4*factor))) +
+            ((1-2/np.pi)*np.cos(np.pi/(4*factor))))
     elif pulse_shape in ('sinc', 'rsinc'):
         span = 6
         t = np.arange(-span*sps, span*sps+1, dtype=float) / sps
         kernel = np.sinc(t)
         if pulse_shape == 'rsinc':
-            kernel = np.sqrt(np.clip(kernel, 0, None))  # évite sqrt sur valeurs négatives
+            kernel = np.sqrt(np.clip(kernel, 0, None))  # évite sqrt sur valeurs négatives. Peut altérer la forme.
     else:
         raise ValueError("Le filtre de mise en forme doit être 'rectangular', 'gaussian', 'raised_cosine', 'root_raised_cosine' ou 'sinc'.")
     # Inversion du noyau pour le filtrage adapté
@@ -154,6 +177,7 @@ def matched_filter(iq_wave, frame_rate, symbol_rate, factor=0.5, pulse_shape='re
     kernel /= np.sqrt(np.sum(np.abs(kernel)**2))
     # Application du filtre adapté
     filtered_signal = convolve(iq_wave, kernel, mode='same')
+
     return filtered_signal
 
 def hilbert(x):

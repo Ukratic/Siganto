@@ -230,6 +230,8 @@ def get_fra_lib():
         "norm_amplitude" : "Amplitude (normalisée)",
         "envelope_spectrum": "Spectre de l'enveloppe",
         "speed_estimate": "Mesures Rapidité",
+        "resample_value": "Entrer la nouvelle fréquence d'échantillonnage (Hz) :",
+        "resample_poly": "Rééchantillonnage polyphasé",
 
     }
     return fra_lib
@@ -464,6 +466,8 @@ def get_eng_lib():
         "norm_amplitude" : "Amplitude (normalized)",
         "envelope_spectrum": "Envelope Spectrum",
         "speed_estimate": "Symbol Rate Metrics",
+        "resample_value": "Enter the new sampling frequency (Hz) :",
+        "resample_poly": "Polyphase Resampling",
 
     }
     return eng_lib

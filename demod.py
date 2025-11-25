@@ -5,9 +5,9 @@ import scipy.signal as signal
 import string
 
 
-def find_clock_frequency(spectrum, sample_rate, target_rate=None, precision=0.9):
+def find_clock_frequency(fdiff, sample_rate, target_rate=None, precision=0.9):
     """Détermine la fréquence d'horloge"""
-    maxima = signal.argrelextrema(spectrum, np.greater_equal)[0]
+    maxima = signal.argrelextrema(fdiff, np.greater_equal)[0]
     while maxima[0] < 2:
         maxima = maxima[1:]
     if not maxima.any():
@@ -20,7 +20,7 @@ def find_clock_frequency(spectrum, sample_rate, target_rate=None, precision=0.9)
         min_rate, max_rate = None, None
 
     # Convertit les fréquences min/max en bins FFT
-    nfft = len(spectrum)
+    nfft = len(fdiff)
     min_bin = int((min_rate / sample_rate) * nfft) if min_rate else 2
     max_bin = int((max_rate / sample_rate) * nfft) if max_rate else nfft // 2
 
@@ -30,8 +30,8 @@ def find_clock_frequency(spectrum, sample_rate, target_rate=None, precision=0.9)
     if maxima.size == 0:
         return 0  # pas de pic dans la plage
 
-    threshold = max(spectrum[2:-1]) * 0.8
-    indices_above_threshold = np.argwhere(spectrum[maxima] > threshold)
+    threshold = max(fdiff[2:-1]) * 0.8
+    indices_above_threshold = np.argwhere(fdiff[maxima] > threshold)
 
     return int(maxima[indices_above_threshold[0]]) if indices_above_threshold.size > 0 else 0
 
@@ -96,7 +96,7 @@ def estimate_baud_rate(a, sample_rate, target_rate=None, precision=0.9, debug=Fa
     baud_rate = p * sample_rate / len(f)
     if debug:
         print("peak frequency index: %d / %d" % (p, len(f)))
-        print("estimated baud rate: %f symbols/s" % baud_rate)
+        print("estimated baud rate: %f" % baud_rate)
     return baud_rate
 
 # Fonctions de slicing : binaire, 4-FSK, MFSK. Soft -> bits.
@@ -493,7 +493,7 @@ def costas_loop(x, fs, loop_bandwidth, order=2):
         
         # Detection d'erreur (BPSK/QPSK)
         if order == 2:  # BPSK
-            error = (np.sign(mixed.real) * mixed.imag)
+            error = np.real(mixed) * np.imag(mixed)
         elif order == 4:  # QPSK
             error = np.sign(mixed.real) * mixed.imag - np.sign(mixed.imag) * mixed.real
         else:
@@ -653,5 +653,42 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
             bits.extend(dibit)
 
         return np.array(bits, dtype=np.uint8)
-    
-    
+
+    else:
+        raise ValueError("Unsupported combination of order/differential/offset/pi4.")
+
+# Inutilisée pour l'instant ; peut servir pour affiner le timing CPM. A tester
+def estimate_timing_phase(signal, sps, zero=0):
+    """Estime le décalage de phase dans un signal NRZ via zero-crossings.
+    Méthode basée sur un algorithme proposé par Eduardo Fuentetaja"""
+    sum_cos = 0.0
+    sum_sin = 0.0
+
+    last_value = signal[0]
+    last_gt_zero = last_value >= zero
+
+    for i in range(1, len(signal)):
+        value = signal[i]
+        value_gt_zero = value >= zero
+
+        if value_gt_zero != last_gt_zero:
+            # interp linéaire
+            x = float(last_value) / float(last_value - value)
+            crossing = (i - 1) + x
+
+            # modulo sps
+            crossing %= sps
+
+            # normalise l'angle
+            angle = crossing * 2.0 * np.pi / sps
+            slope = abs(value - last_value)
+            sum_cos += np.cos(angle) * slope
+            sum_sin += np.sin(angle) * slope
+
+        last_value = value
+        last_gt_zero = value_gt_zero
+
+    # calcul de l'offset par moyenne vectorielle
+    offset = np.arctan2(sum_sin, sum_cos)
+    offset *= sps / (2.0 * np.pi)
+    return offset

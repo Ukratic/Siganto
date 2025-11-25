@@ -835,6 +835,21 @@ def upsample_signal():
     plot_initial_graphs()
     display_file_info()
 
+def polyphase_resample():
+    # rééchantillonnage par méthode polyphasée
+    global iq_wave, frame_rate
+    new_fs = tk.simpledialog.askstring(lang["resample_poly"], lang["resample_value"], parent=root)
+    if new_fs is None:
+        if debug is True:
+            print("Taux de rééchantillonnage non défini")
+        return
+    new_fs = int(new_fs)
+    iq_wave, frame_rate = sm.resample_polyphase(iq_wave, frame_rate, new_fs)
+    if debug is True:
+        print("Signal rééchantillonné à ", new_fs, " Hz via méthode polyphasée")
+    plot_initial_graphs()
+    display_file_info()
+
 def cut_signal():
     # coupure du signal : entrer les points de début et de fin (en secondes)
     global iq_wave, frame_rate
@@ -2525,6 +2540,7 @@ def load_lang_changes():
     sample_submenu = tk.Menu(mod_menu,tearoff=0)
     sample_submenu.add_command(label=lang["downsample"], command=downsample_signal)
     sample_submenu.add_command(label=lang["upsample"], command=upsample_signal)
+    sample_submenu.add_command(label=lang["resample_poly"], command=polyphase_resample)
     mod_menu.add_cascade(label=lang["resample"],menu=sample_submenu)
     # Découpage : réduire durée
     cut_submenu = tk.Menu(mod_menu,tearoff=0)
