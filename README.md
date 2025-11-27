@@ -25,6 +25,7 @@ Overlap.
 - Central Frequency offset (enter a value, cursor selection or fine-tuning with arrow keys ; last option available only on tri-graph group for now)
 - Coarse doppler correction (essentially a diagonal frequency shift)
 - Down or Up Sampling (by ratio of an integer >1)
+- Polyphase resampling (target sample rate)
 - Cut part of the signal in time (enter a value or by cursor selection ; the latter only works reliably on spectrogram)
 - Modify parameters for transition smoothing (phase, frequency) & persistence bins
 - Save as a new .wav file
@@ -32,12 +33,15 @@ Overlap.
 - Low/High/Band Pass
 - FIR, Wiener, Median, Moving average, Mean
 - Matched Filter : Gaussian, Raised Cosine, Root Raised Cosine, Sinc, Rsinc, Rectangular
-#### 4. Main graphs
-- Spectrogram (STFT & 3D)
-- Groups combining graphs on the same window
+#### 4. Spectrograms
+- Group : Spectrogram & DSP
+- Group : Spectrogram, Constellation and Peak power spectrum. Frequency fine-tuning: Left/right arrows on keyboard for 1Hz step, clickable GUI arrows for 0.01Hz step
+- 3D spectrogram
+- Spectrogram
 #### 5. Power Metrics
-- PSD (and variant)
-- Time/Amplitude (IQ samples)
+- Power Spectral Density
+- Peak Power Spectrum
+- Time Domain / Amplitude
 #### 6. Frequency Metrics
 - Persistence Spectrum
 - Frequency Distribution
@@ -47,7 +51,7 @@ Overlap.
 - Constellation
 - Phase Distribution
 - Phase Transitions
-- Eye Diagram
+- Eye Diagram (not synchronized)
 #### 8. Symbol Rate Metrics
 - Envelope Specturm
 - Power Envelope Spectrum
@@ -61,7 +65,7 @@ Overlap.
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
 #### 11. Demodulation
 - 2 or 4 CPM/FSK & PSK Demodulation (with optional baud rate estimation)
-- AM & FM Demodulation (visual output and result signal saved for playback or further analysis)
+- AM & FM Demodulation (visual output and result signal saved for audio playback, further analysis or demodulation)
 - MFSK Demodulation (2 methods : tone detection or from smoothed frequency transitions)
 #### 12. Audio
 - Audio playback (you may need to choose the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded)
@@ -85,21 +89,6 @@ Overlap.
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_9.png" alt="FSK_demod"/>
 
 ### Changelog :
-- *V1.05* : <br>
--- First upload on github<br>
-
-- *V1.06* : <br>
--- Options for the window function of the STFT : Hann, Hamming, Blackman, Bartlett, Kaiser, Flat Top, Rectangular.<br>
--- Dynamic frequency resolution on file load instead of fixed FFT size, improving first look at a signal in most cases.<br>
--- Frequency fine-tuning (1Hz or 0.01Hz step) on the Spectrogram/Constellation group. Left/right arrows on keyboard for 1Hz step, clickable GUI arrows for 0.01Hz step. <br> 
--- 2 & 4 FSK demodulation.<br>
--- Bug fixes on existing features.<br>
-
-- *V1.07* : <br>
--- AM/FM demodulation.<br>
--- Audio Output (optional feature adding the sounddevice library as a dependency).<br>
--- Bug fixes on existing features.<br>
-
 - *V1.08* : <br>
 -- More filtering options (median, moving average, gaussian, Wiener, FIR). Some tweaking needed to make them user-friendly.<br>
 -- 4-FSK demodulation now actually functional.<br>
@@ -120,13 +109,9 @@ Overlap.
 
 - *V1.10* :<br>
 -- Fixed power scaling on various graphs. Normalized when exact values are not relevant.<br>
--- Added resampling options : Polyphase & CIC. <br>
+-- Added polyphase resampling.<br>
 -- Added Envelope Spectrum & renamed some symbol rate graphs with a clearer title.<br>
 -- Automatic symbol rate estimation now has a confidence level.<br>
-
-*Planned for later :*<br>
--- More parameters available in GUI.<br>
--- Pre-decoding tools.<br>
 
 ### Using the app
 1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>

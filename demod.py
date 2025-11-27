@@ -211,8 +211,7 @@ def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
     bits = np.array([b for idx in indices for b in bit_map[idx]], dtype=np.uint8)
     return bits
 
-
-def _parabolic_interpol(mag, k):
+def parabolic_interpol(mag, k):
     # Parabolic peak interpolation around bin k (on linear power or magnitude)
     # Returns fractional bin offset delta in [-0.5, 0.5] roughly
     if k <= 0 or k >= len(mag)-1:
@@ -228,7 +227,7 @@ def _parabolic_interpol(mag, k):
 
     return delta
 
-def _cluster_freqs(freqs, weights=None, merge_hz=0.0):
+def cluster_freqs(freqs, weights=None, merge_hz=0.0):
     if len(freqs) == 0:
         return np.array([])
     order = np.argsort(freqs)
@@ -249,16 +248,16 @@ def _cluster_freqs(freqs, weights=None, merge_hz=0.0):
     clusters.sort(key=lambda x: -x[1])  # by weight
     return np.array([c[0] for c in clusters])
 
-def detect_and_track_mfsk_auto(
+def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de MFSK différents (espacement, nombre de tons, SNR, dérive freq, etc)
     iq, fs, baud,
     num_tones=None,              # keep top-N tones after clustering (None=all)
     peak_thresh_db=8,            # per-frame relative threshold
-    peak_prominence=None,        # optional: e.g. 3 (dB) -> converted internally
-    win_factor=1.0,              # window length ≈ win_factor * (fs/baud)
-    hop_factor=0.25,             # hop ≈ hop_factor * window
+    peak_prominence=None,        # optional: e.g. 3 (dB) : converted internally
+    win_factor=1.0,              # window length : win_factor * (fs/baud)
+    hop_factor=0.25,             # hop : hop_factor * window
     merge_bins=1.2,              # cluster width in bins for tone dedup
     switch_penalty=0.05          # Viterbi penalty (linear power units)
-):
+): 
     """
     Auto-detect baseband MFSK tones (±freq) and track them over time.
     - Uses sub-bin (parabolic) peak interpolation for tone detection
@@ -266,11 +265,11 @@ def detect_and_track_mfsk_auto(
     - Tracks via matched complex oscillators (Goertzel-style) + Viterbi
     """
 
-    # --- Analysis window & hop (integers) ---
-    sym_len = fs / float(baud)              # fractional allowed, no strict alignment needed
+    # Analysis window & hop based on symbol duration
+    sym_len = fs / float(baud) # fractional allowed, no strict alignment needed
     N = max(16, int(round(win_factor * sym_len)))
     H = max(1, int(round(hop_factor * N)))
-    nfft = N  # keeping nfft=N (power-of-two not required)
+    nfft = N
     df = fs / nfft
 
     # Window & frequency grid
@@ -278,7 +277,7 @@ def detect_and_track_mfsk_auto(
     win = 0.5 - 0.5*np.cos(2*np.pi*n/(N-1))   # Hann
     freqs = np.fft.fftshift(np.fft.fftfreq(nfft, 1/fs))
 
-    # --- Stage 1: Tone detection over full spectrum with sub-bin interpolation ---
+    # Tone detection over full spectrum with sub-bin interpolation
     obs_freqs = []
     obs_w = []
 
@@ -300,15 +299,15 @@ def detect_and_track_mfsk_auto(
 
         for k in peaks:
             # Sub-bin interpolation
-            delta = _parabolic_interpol(mag, k)
+            delta = parabolic_interpol(mag, k)
             f_est = freqs[k] + delta * df
             obs_freqs.append(f_est)
             # Weight: use linear power as weight
             obs_w.append(mag[k]**2)
 
     # Cluster close frequencies so each tone appears once
-    merge_hz = max(df * merge_bins, 0.5)  # at least ~0.5 Hz to avoid crazy fragmentation
-    tones_all = _cluster_freqs(obs_freqs, weights=obs_w, merge_hz=merge_hz)
+    merge_hz = max(df * merge_bins, 0.5)  # at least 0.5 Hz to avoid crazy fragmentation
+    tones_all = cluster_freqs(obs_freqs, weights=obs_w, merge_hz=merge_hz)
     if num_tones is not None and len(tones_all) > num_tones:
         tones_all = tones_all[:num_tones]
     tone_freqs = np.sort(tones_all)
@@ -316,7 +315,7 @@ def detect_and_track_mfsk_auto(
     if K == 0:
         return np.array([]), np.array([]), np.array([]), np.array([]), np.empty((0,0))
 
-    # --- Stage 2: Tracking with matched oscillators (bin-free; exact Hz ok) ---
+    # Tracking with matched oscillators (bin-free; exact Hz ok)
     # Energy-normalized window
     win_e = win / np.sqrt(np.sum(win**2) + 1e-12)
     # Oscillators per tone (K x N)
@@ -351,8 +350,8 @@ def detect_and_track_mfsk_auto(
             dp[i] = dp[i-1] + tone_pows[i]
             back[i] = 0
         else:
-            prev = dp[i-1][:, None]          # (K,1)
-            scores = prev - pen              # (K,K): from j→k
+            prev = dp[i-1][:, None] # (K,1)
+            scores = prev - pen # (K,K): from j→k
             j_star = np.argmax(scores, axis=0)
             best_prev = scores[j_star, np.arange(K)]
             dp[i] = best_prev + tone_pows[i]
@@ -373,12 +372,12 @@ def detect_and_track_mfsk_auto(
     start = 0
     for i in range(1, len(tone_idx)):
         if tone_idx[i] != tone_idx[i-1]:
-            runs.append(i - start)   # run length in frames
+            runs.append(i - start) # run length in frames
             start = i
-    runs.append(len(tone_idx) - start)  # last run
+    runs.append(len(tone_idx) - start) # last run
 
     if len(runs) > 0:
-        avg_run = np.median(runs)       # median = robust against outliers
+        avg_run = np.median(runs) # median = robust against outliers
         measured_rate = 1.0 / (avg_run * dt)
     else:
         measured_rate = 0.0
@@ -386,6 +385,7 @@ def detect_and_track_mfsk_auto(
     return tone_freqs, times, tone_idx, tone_trace, tone_pows, measured_rate
 
 def eye_diagram_with_metrics(samples, fs, baud_rate, channel="I", num_traces=500, symbols_per_trace=2):
+    # A travailler : correction de timing de phase
     """Trace un diagramme de l'oeil avec métriques associées"""
     # Sélection du canal
     if np.iscomplexobj(samples):
@@ -657,7 +657,7 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
     else:
         raise ValueError("Unsupported combination of order/differential/offset/pi4.")
 
-# Inutilisée pour l'instant ; peut servir pour affiner le timing CPM. A tester
+# Inutilisée pour l'instant ; peut servir pour affiner le timing CPM. A tester + trouver autre méthode pour PSK et ordre supérieur à 2.
 def estimate_timing_phase(signal, sps, zero=0):
     """Estime le décalage de phase dans un signal NRZ via zero-crossings.
     Méthode basée sur un algorithme proposé par Eduardo Fuentetaja"""
