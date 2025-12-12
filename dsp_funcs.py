@@ -131,9 +131,9 @@ def morlet_cwt(iq_wave, fs, fmin=None, fmax=None, nfreq=96, w=6.0):
     dt = 1.0 / fs
 
     if fmin is None:
-        fmin = fs / N      # résolution en fréquence
+        fmin = fs / N # résolution en fréquence
     if fmax is None:
-        fmax = fs / 2.0    # Nyquist
+        fmax = fs / 2.0 # Nyquist
 
     # Calcul des échelles
     freqs = np.geomspace(fmin, fmax, nfreq)
@@ -148,7 +148,7 @@ def morlet_cwt(iq_wave, fs, fmin=None, fmax=None, nfreq=96, w=6.0):
         C /= np.sqrt(s)  # normalisation par l'échelle
         coefs.append(C)
 
-    coefs = np.vstack(coefs)
+    coefs = np.vstack(coefs) # shape (nfreq, N)
     center_freqs = w / scales  # radians/échantillon
     center_freqs_pi = center_freqs / np.pi # en pi rad/sample pour cohérence avec d'autres outils
 

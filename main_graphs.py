@@ -8,13 +8,13 @@ def compute_spectrogram(iq_wave, frame_rate, N, window_func='hann'):
     """Spectrogramme basé sur la FFT Cooley-Tukey (numpy.fft), cf PyDSP (Dr M. Lichtman), sans overlap"""
     # Calcule nb de lignes pour la matrice
     num_rows = len(iq_wave) // N
-    spectrogram = np.zeros((num_rows, N))
+    spectrogram = np.zeros((num_rows, N)) # Initialisation matrice
     # Choix de fenetre
     window = df.get_window(window_func, N)
     # Calc spectrogramme
     for i in range(num_rows):
-        chunk = iq_wave[i*N:(i+1)*N] * window
-        spectrogram[i, :] = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(chunk)))**2)
+        chunk = iq_wave[i*N:(i+1)*N] * window # Segmentation + fenêtrage
+        spectrogram[i, :] = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(chunk)))**2) # FFT + Magnitude + dB + Shift
     # Bins fréquence et temps
     freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1/frame_rate))
     times = np.arange(num_rows) * (N / frame_rate)
@@ -32,13 +32,13 @@ def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
     # Output arrays
     stft_matrix = []
     times = []
-    for i in range(num_windows):
-        start = i * step_size
+    for i in range(num_windows): # Loop fenêtres
+        start = i * step_size # Indices
         end = start + window_size
         # Segmentation et fenêtrage
         segment = iq_wave[start:end]
-        if len(segment) < window_size:
-            segment = np.pad(segment, (0, window_size - len(segment)))
+        if len(segment) < window_size: # Zero padding si nécessaire
+            segment = np.pad(segment, (0, window_size - len(segment))) 
         segment = segment * window
         # Compute FFT
         fft_segment = np.fft.fft(segment)
@@ -52,7 +52,7 @@ def compute_stft(iq_wave, frame_rate, window_size, overlap, window_func='hann'):
     except:
         freqs = None
 
-    return freqs, np.array(times), 20 * np.log10(np.abs(stft_matrix))
+    return freqs, np.array(times), 20 * np.log10(np.abs(stft_matrix)) # Magnitude en dB
 
 # DSP
 def compute_dsp(iq_wave, frame_rate, N=256, overlap=128, window_type='hann'):
@@ -93,4 +93,4 @@ def estimate_bandwidth(iq_wave, frame_rate, N=256, overlap=128, window_type='han
     max_freq = max(significant_freqs)
     bandwidth = max_freq - min_freq
 
-    return bandwidth, min_freq, max_freq, freqs, 10*np.log10(dsp)
+    return bandwidth, min_freq, max_freq, freqs, 10*np.log10(dsp) # DSP en dB

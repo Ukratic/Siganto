@@ -8,8 +8,8 @@ def bandpass_filter(iq_wave, lowcut, highcut, frame_rate, order=4):
     nyquist = frame_rate / 2
     low = lowcut / nyquist
     high = highcut / nyquist
-    b, a = butter(order, [low, high], btype='band')
-    filtered_signal = filtfilt(b, a, iq_wave)
+    b, a = butter(order, [low, high], btype='band') # Butterworth
+    filtered_signal = filtfilt(b, a, iq_wave) # application du filtre en avant et en arrière pour éviter la distorsion de phase
 
     return filtered_signal
 
@@ -19,8 +19,8 @@ def lowpass_filter(iq_wave, highcut, frame_rate, order=4):
     if not 0 < highcut < nyquist:
         raise ValueError("Fréquence de coupure doit être entre 0 et la fréquence de Nyquist.")
     high = highcut / nyquist
-    b, a = butter(order, high, btype='low')
-    filtered_signal = filtfilt(b, a, iq_wave)
+    b, a = butter(order, high, btype='low') # Butterworth
+    filtered_signal = filtfilt(b, a, iq_wave) # application du filtre en avant et en arrière pour éviter la distorsion de phase
 
     return filtered_signal
 
@@ -30,13 +30,15 @@ def highpass_filter(iq_wave, lowcut, frame_rate, order=4):
     if not 0 < lowcut < nyquist:
         raise ValueError("Fréquence de coupure doit être entre 0 et la fréquence de Nyquist.")
     low = lowcut / nyquist
-    b, a = butter(order, low, btype='high')
-    filtered_signal = filtfilt(b, a, iq_wave)
+    b, a = butter(order, low, btype='high') # Butterworth
+    filtered_signal = filtfilt(b, a, iq_wave) # application du filtre en avant et en arrière pour éviter la distorsion de phase
 
     return filtered_signal
 
 def downsample(iq_wave, frame_rate, decimation_factor):
-    """Sous-échantillonnage par slicing"""
+    """Sous-échantillonnage par slicing.
+    Avantages : simple, rapide, pas de dépendance externe.
+    Inconvénients : aliasing possible si pas de filtrage préalable"""
     # facteur de décimation
     decimation_factor = int(decimation_factor)
     if decimation_factor < 1:
@@ -66,10 +68,10 @@ def upsample(iq_wave, frame_rate, oversampling_factor):
 # méthode de rééchantillonnage par interpolation polyphasique : plus précise et efficace, mais plus complexe
 def resample_polyphase(iq_wave, frame_rate, fs_new):
     """Resampling par interpolation polyphasique"""
-    gcd = np.gcd(frame_rate, fs_new)
+    gcd = np.gcd(frame_rate, fs_new) # plus grand commun diviseur
     up = fs_new // gcd
     down = frame_rate // gcd
-    resampled_signal = resample_poly(iq_wave, up, down)
+    resampled_signal = resample_poly(iq_wave, up, down) # interpolation polyphasique avec scipy
 
     return resampled_signal, fs_new
 
@@ -79,10 +81,10 @@ def resample_cic(iq_wave, frame_rate, fs_new):
     ratio = fs_new / frame_rate
     n_out = int(len(iq_wave) * ratio)
     t = np.arange(n_out) / ratio
-    i0 = np.floor(t).astype(int)
-    i1 = np.minimum(i0 + 1, len(iq_wave) - 1)
-    frac = t - i0
-    resampled_signal = (1 - frac) * iq_wave[i0] + frac * iq_wave[i1]
+    i0 = np.floor(t).astype(int) # indices entiers
+    i1 = np.minimum(i0 + 1, len(iq_wave) - 1) # indices suivants, avec gestion des bords
+    frac = t - i0 # fraction pour interpolation linéaire
+    resampled_signal = (1 - frac) * iq_wave[i0] + frac * iq_wave[i1] # interpolation linéaire
 
     return resampled_signal, fs_new
 
@@ -91,9 +93,10 @@ def median_filter(iq_wave, kernel_size=3):
     """Applique un filtre médian pour réduire le bruit"""
     if kernel_size < 1 or kernel_size % 2 == 0 or not isinstance(kernel_size, int):
         raise ValueError("La taille du noyau doit être un entier positif impair.")
+    # Filtrage séparé des parties réelle et imaginaire
     real_part_filtered = medfilt(np.real(iq_wave), kernel_size=kernel_size)
     imag_part_filtered = medfilt(np.imag(iq_wave), kernel_size=kernel_size)
-    filtered_complex_data = real_part_filtered + 1j * imag_part_filtered
+    filtered_complex_data = real_part_filtered + 1j * imag_part_filtered # reconstruction du signal complexe
 
     return filtered_complex_data
 
@@ -102,8 +105,9 @@ def moving_average(iq_wave, window_size):
     if window_size < 1 or not isinstance(window_size, int):
         raise ValueError("La taille de la fenêtre doit être un entier positif.")
     kernel = np.ones(window_size) / window_size
+    # Application de la convolution
 
-    return np.convolve(iq_wave, kernel, mode='same')
+    return np.convolve(iq_wave, kernel, mode='same') # 'same' pour garder la même taille de sortie
 
 def wiener_filter(iq_wave, size=None, noise=None):
     """Applique un filtre de Wiener pour réduire le bruit"""
@@ -112,7 +116,7 @@ def wiener_filter(iq_wave, size=None, noise=None):
     if noise is not None and (not isinstance(noise, (int, float)) or noise < 0):
         raise ValueError("noise doit être un nombre positif ou zéro.")
     
-    return wiener(iq_wave, mysize=size, noise=noise)
+    return wiener(iq_wave, mysize=size, noise=noise) # application du filtre de Wiener de scipy
 
 def fir_filter(iq_wave, fs, cutoff, filter_type='lowpass', numtaps=101):
     """Applique un filtre FIR (Finite Impulse Response) pour filtrer le signal IQ"""
@@ -127,7 +131,7 @@ def fir_filter(iq_wave, fs, cutoff, filter_type='lowpass', numtaps=101):
         raise ValueError("numtaps doit être un entier positif.")
     nyq = 0.5 * fs
     norm_cutoff = cutoff / nyq if np.isscalar(cutoff) else [c / nyq for c in cutoff]
-    taps = firwin(numtaps, norm_cutoff, pass_zero=filter_type)
+    taps = firwin(numtaps, norm_cutoff, pass_zero=filter_type) # conception du filtre FIR
 
     return lfilter(taps, 1.0, iq_wave)
 
@@ -182,8 +186,8 @@ def matched_filter(iq_wave, frame_rate, symbol_rate, factor=0.5, pulse_shape='re
 
 def hilbert(x):
     N = len(x)
-    Xf = np.fft.fft(x)
-    h = np.zeros(N)
+    Xf = np.fft.fft(x) # transformée de Fourier du signal
+    h = np.zeros(N) # vecteur de gain pour le filtre de Hilbert
     
     if N % 2 == 0:
         h[0] = 1
@@ -194,21 +198,19 @@ def hilbert(x):
         h[1:(N+1)//2] = 2
     
     Xf *= h  # garde freq positives, zero négatives
-    x_analytic = np.fft.ifft(Xf)
+    x_analytic = np.fft.ifft(Xf) # transformée inverse pour obtenir le signal analytique
     
     return x_analytic
 
 def doppler_lin_shift(iq_wave, frame_rate, start_freq, end_freq):
-    """Applique un décalage Doppler linéaire au signal IQ"""
+    """Applique un décalage Doppler linéaire au signal IQ.
+    Méthode grossière : simule ou corrige un décalage Doppler linéaire"""
     n = len(iq_wave)
     t = np.arange(n) / frame_rate
-    
     # Trajectoire de fréquence linéaire
     inst_freq = start_freq + (end_freq - start_freq) * (t / t[-1])
-    
     # Phase = -2π ∫ f(t) dt
     phase = -2 * np.pi * np.cumsum(inst_freq) / frame_rate
-    
     # Correction (ou simulation si start_freq/end_freq choisis arbitrairement)
     correction = np.exp(1j * phase)
     iq_out = iq_wave * correction

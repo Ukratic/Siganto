@@ -1352,7 +1352,7 @@ def frequency_cumulative():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    hist, bins = em.frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=hist_bins)
+    hist, bins = em.frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=hist_bins, window_size=diff_window, window_type=window_choice)
     ax.plot(bins, hist)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(lang["density"])

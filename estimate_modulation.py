@@ -99,7 +99,7 @@ def power_series(iq_wave, frame_rate):
 
 # Cyclospectre
 def cyclic_spectrum_fft(iq_wave, frame_rate, alpha_list):
-    """Cyclospectre FFT"""
+    """Cyclospectre FFT. Retourne la corrélation cyclique pour une liste de fréquences alpha."""
     N = len(iq_wave)
     y = np.abs(iq_wave)**2  # |x[n]|^2
     Y = np.fft.fftshift(np.fft.fft(y, n=N))
@@ -110,7 +110,9 @@ def cyclic_spectrum_fft(iq_wave, frame_rate, alpha_list):
     return cyclic_corr
 
 def cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window, frame_len=512, step=256):
-    """Cyclospectre avec FFT glissante"""
+    """Cyclospectre avec FFT glissante.
+    Estimation de la rapidité de modulation basée sur la moyenne du cyclospectre.
+    Demande plus de calculs (nb d'échantillons conséquent) mais plus robuste que d'une seule FFT sur tout le signal."""
     window = df.get_window(window, frame_len)
     alpha_list = np.linspace(-frame_rate/2, frame_rate/2, int(np.log(len(iq_wave))*1000))  # fréquences cycliques
     # Initialisation de l'accumulateur de corrélation cyclique
@@ -124,7 +126,7 @@ def cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window, frame_len=512, step
         cyclic_corr_accum += cyclic_corr
         frame_count += 1
 
-    cyclic_corr_avg = cyclic_corr_accum / frame_count
+    cyclic_corr_avg = cyclic_corr_accum / frame_count # moyenne des corrélations cycliques
 
     # On retire les pics de puissance autour de 0 Hz pour déterminer la rapidité de modulation
     discard_dc = np.abs(cyclic_corr_avg)
@@ -149,7 +151,7 @@ def persistance_spectrum(iq_wave, frame_rate, N=256, power_bins=50, window_type=
     num_windows = (len(iq_wave) - overlap) // step_size
     spectrogram = np.zeros((num_windows, N))
     window = df.get_window(window_type, N)
-    for i in range(num_windows):
+    for i in range(num_windows): # calcul du spectrogramme
         start = i * step_size
         end = start + N
         segment = iq_wave[start:end] * window
@@ -176,7 +178,7 @@ def persistance_spectrum(iq_wave, frame_rate, N=256, power_bins=50, window_type=
 
 # Visualiser la phase dans le domaine temporel
 def phase_time_angle(iq_wave, frame_rate, window_size=5, window_type='rectangular', unwrap=False):
-    """Transitions de phase"""
+    """Transitions de phase dans le domaine temporel (phase instantanée)"""
     phase = np.angle(iq_wave)
     # Lissage de la phase
     if unwrap:
@@ -194,7 +196,8 @@ def phase_time_angle(iq_wave, frame_rate, window_size=5, window_type='rectangula
 
 # Mesures de phase cumulée
 def phase_cumulative_distribution(iq_wave, num_bins=250):
-    """Distribution of positive wrapped phase (0 to π)"""
+    """Estimation de la distribution de la phase positive
+    Peut aider à identifier certains types de modulation mais requiert une bonne synchronisation en fréquence"""
     phase = np.angle(iq_wave)  # wrapped [-π, π]
     phase_pos = phase[phase > 0]  # garder seulement les phases positives
     hist, bin_edges = np.histogram(phase_pos, bins=num_bins, range=(0, np.pi), density=True)
@@ -203,7 +206,7 @@ def phase_cumulative_distribution(iq_wave, num_bins=250):
     return hist, bin_centers
 
 def frequency_transitions(iq_wave, frame_rate, window_size=5, window_type='rectangular'):
-    """Transitions de fréquence"""
+    """Transitions de fréquence dans le domaine temporel (fréquence instantanée)"""
     phase = np.unwrap(np.angle(iq_wave))
     # Freq instantanee derivee de la phase
     inst_freq = np.diff(phase) / (2 * np.pi) * frame_rate
@@ -219,11 +222,10 @@ def frequency_transitions(iq_wave, frame_rate, window_size=5, window_type='recta
     return time, smoothed_freq
 
 # Mesures de fréquence cumulée
-def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
-    """Distribution de fréquence"""
-    # Unwrap phase pour éviter sauts de +2pi
-    phase = np.unwrap(np.angle(iq_wave))
-    inst_freq = np.diff(phase) / (2 * np.pi) * frame_rate
+def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250, window_size=5, window_type='rectangular'):
+    """Distribution de fréquence instantanée"""
+    # optionnel : lisser la fréquence instantanée pour une distribution plus propre
+    inst_freq = frequency_transitions(iq_wave, frame_rate, window_size, window_type)[1]
     # Histogramme de la fréquence instantanée cumulée
     hist, bin_edges = np.histogram(inst_freq, bins=num_bins, density=True)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
@@ -238,7 +240,7 @@ def frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=250):
 def autocorrelation(iq_wave, frame_rate=None):
     """Fonction d'autocorrélation sur la FFT"""
     n = len(iq_wave)
-    n_padded = 2**np.ceil(np.log2(2 * n - 1)).astype(int)
+    n_padded = 2**np.ceil(np.log2(2 * n - 1)).astype(int) # zero padding
     # FFT du signal pour l'autocorrelation
     fft_iq_wave = np.fft.fft(iq_wave, n=n_padded)
     yx = np.fft.ifft(fft_iq_wave * np.conj(fft_iq_wave)).real  # Resultat d'autocorrelation
@@ -275,7 +277,8 @@ def autocorrelation_peak_from_acf(yx, lags, min_distance=1):
 
 # Autocorrelation complète (lente)
 def full_autocorrelation(iq_wave):
-    """Fonction d'autocorrélation sur le signal complexe"""
+    """Fonction d'autocorrélation sur le signal complexe.
+    Fonction plus lente que l'autocorrélation par FFT mais retourne la fonction complète, plus précise"""
     yx, lags = np.correlate(iq_wave, iq_wave, mode='full'), np.arange(-len(iq_wave)+1, len(iq_wave))
     # les valeurs négatives de lags sont ignorées = doublons
     yx = yx[len(iq_wave)-1:]
@@ -300,7 +303,7 @@ def scf_tsm(samples, fs=48000, Nw=512, window=None, overlap=256, max_alpha=None,
     else:
         window = df.get_window(window,Nw)
 
-    SCF = np.zeros((len(alphas), Nw), dtype=complex)
+    SCF = np.zeros((len(alphas), Nw), dtype=complex) # initialisation de SCF
 
     for ii, alpha in enumerate(alphas): # on boucle sur les fréquences cycliques
         n = np.arange(N)
@@ -341,11 +344,11 @@ def estimate_ofdm_symbol_duration(iq_wave, frame_rate, min_distance=1):
 def estimate_alpha(iq_wave, frame_rate, estimated_ofdm_symbol_duration):
     """Estimation écart de fréquence alpha à partir de la fonction d'autocorrélation"""
     index_delay  = round(estimated_ofdm_symbol_duration*1e-3*frame_rate) # delay index
-    conj = iq_wave[0:-index_delay]*np.conj(iq_wave[index_delay:])
-    caf = np.fft.fftshift(np.fft.fft(conj))
+    conj = iq_wave[0:-index_delay]*np.conj(iq_wave[index_delay:]) # produit conjugué décalé
+    caf = np.fft.fftshift(np.fft.fft(conj)) # corrélation cyclique
     len_caf = len(caf)
     alpha = (-1/2 + np.arange(len_caf)/len_caf)*frame_rate
-    # trouver automatiquement le pic de la CAF pour estimer le pic alpha, en ignorant le pic à 0
+    # trouver automatiquement le pic de la CAF dans les fréquences alpha en ignorant le pic DC
     discard_dc = np.abs(caf)
     zero_index = np.abs(alpha).argmin()
     discard_dc[zero_index-10:zero_index+10] = 0
@@ -356,12 +359,12 @@ def estimate_alpha(iq_wave, frame_rate, estimated_ofdm_symbol_duration):
 
 def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
     """Calcul des paramètres OFDM à partir de la fréquence alpha, durée symbole OFDM et BW"""
-    cy_px = (1/abs(alpha0/1e3)) - estimated_ofdm_symbol_duration
-    Df = 1/estimated_ofdm_symbol_duration
-    Df = Df*1e3
-    Tu = estimated_ofdm_symbol_duration
-    Tg = round(cy_px,5)
-    Ts = round(estimated_ofdm_symbol_duration + cy_px,5)
+    cy_px = (1/abs(alpha0/1e3)) - estimated_ofdm_symbol_duration # en ms
+    Df = 1/estimated_ofdm_symbol_duration # en kHz
+    Df = Df*1e3 # en Hz
+    Tu = estimated_ofdm_symbol_duration # en ms
+    Tg = round(cy_px,5) # en ms
+    Ts = round(estimated_ofdm_symbol_duration + cy_px,5) # en ms
     Df = round(Df,3)
     # Estime le nombre de sous-porteuses dans le symbole OFDM à partir de : 1) la bande passante estimée et 2) Df = l'espacement des sous-porteuses
     # Nb max de sous-porteuses

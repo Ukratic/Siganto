@@ -7,13 +7,13 @@ import string
 
 def find_clock_frequency(fdiff, sample_rate, target_rate=None, precision=0.9):
     """Détermine la fréquence d'horloge"""
-    maxima = signal.argrelextrema(fdiff, np.greater_equal)[0]
+    maxima = signal.argrelextrema(fdiff, np.greater_equal)[0] # indices des maxima locaux
     while maxima[0] < 2:
         maxima = maxima[1:]
     if not maxima.any():
         return 0
 
-    if target_rate:
+    if target_rate: # bornes autour de la fréquence cible
         min_rate = target_rate * precision
         max_rate = target_rate / precision
     else:
@@ -33,41 +33,42 @@ def find_clock_frequency(fdiff, sample_rate, target_rate=None, precision=0.9):
     threshold = max(fdiff[2:-1]) * 0.8
     indices_above_threshold = np.argwhere(fdiff[maxima] > threshold)
 
+    # renvoie le premier pic au-dessus du seuil
     return int(maxima[indices_above_threshold[0]]) if indices_above_threshold.size > 0 else 0
 
 def midpoint(a):
     """Fonction pour déterminer le milieu de segment"""
     mean_a = np.mean(a)
     mean_a_greater = np.ma.masked_greater(a, mean_a)
-    high = np.ma.median(mean_a_greater)
-    mean_a_less_or_equal = np.ma.masked_array(a, ~mean_a_greater.mask)
-    low = np.ma.median(mean_a_less_or_equal)
-    return (high + low) / 2
+    high = np.ma.median(mean_a_greater) # médiane des valeurs > moyenne
+    mean_a_less_or_equal = np.ma.masked_array(a, ~mean_a_greater.mask) 
+    low = np.ma.median(mean_a_less_or_equal) # médiane des valeurs ≤ moyenne
+    return (high + low) / 2 # milieu entre les deux médianes
 
 # whole packet clock recovery
 def wpcr(a, sample_rate, target_rate, tau, precision, debug):
     """Fonction principale de la méthode de démodulation"""
     if len(a) < 4:
         return []
-    b = (a > midpoint(a)) * 1.0
-    d = np.diff(b)**2
+    b = (a > midpoint(a)) * 1.0 # seuil
+    d = np.diff(b)**2 # détection des transitions
     if len(np.argwhere(d > 0)) < 2:
         return []
     f = np.fft.fft(d, len(a))
     p = find_clock_frequency(abs(f),sample_rate,target_rate,precision)
     if p == 0:
         return []
-    cycles_per_sample = (p*1.0)/len(f)
-    clock_phase = 0.5 + np.angle(f[p])/(tau)
+    cycles_per_sample = (p*1.0)/len(f) # conversion index bin en cycles/sample
+    clock_phase = 0.5 + np.angle(f[p])/(tau) # phase initiale de l'horloge. tau par défaut = 2*pi
     if clock_phase <= 0.5:
         clock_phase += 1
     symbols = []
     for i in range(len(a)):
         if clock_phase >= 1:
             clock_phase -= 1
-            symbols.append(a[i])
+            symbols.append(a[i]) # échantillon au centre du symbole
         clock_phase += cycles_per_sample
-    clock_frequency = p * sample_rate / len(f)
+    clock_frequency = p * sample_rate / len(f) # conversion en Hz
     if debug:
         print("peak frequency index: %d / %d" % (p, len(f)))
         print("detected clock frequency: %d Hz" % (p * sample_rate // len(f)))
@@ -219,11 +220,11 @@ def parabolic_interpol(mag, k):
     a = mag[k-1]
     b = mag[k]
     c = mag[k+1]
-    denom = (a - 2*b + c)
+    denom = (a - 2*b + c) # 2nd derivative approx
     if abs(denom) < 1e-12:
         return 0.0
-    delta = 0.5 * (a - c) / denom
-    delta = np.clip(delta, -1.0, 1.0)
+    delta = 0.5 * (a - c) / denom # vertex of the parabola
+    delta = np.clip(delta, -1.0, 1.0) # avoid crazy offsets
 
     return delta
 
@@ -232,21 +233,21 @@ def cluster_freqs(freqs, weights=None, merge_hz=0.0):
         return np.array([])
     order = np.argsort(freqs)
     freqs = np.asarray(freqs, float)[order]
-    w = np.ones_like(freqs) if weights is None else np.asarray(weights, float)[order]
+    w = np.ones_like(freqs) if weights is None else np.asarray(weights, float)[order] # sorted weights
 
     clusters = []
-    cf, cw = freqs[0], w[0]
+    cf, cw = freqs[0], w[0] # current freq & weight
     for f, ww in zip(freqs[1:], w[1:]):
         if abs(f - cf) <= merge_hz:
             # merge
-            cf = (cf*cw + f*ww) / (cw + ww)
-            cw += ww
+            cf = (cf*cw + f*ww) / (cw + ww) # weighted average
+            cw += ww # total weight
         else:
-            clusters.append((cf, cw))
-            cf, cw = f, ww
+            clusters.append((cf, cw)) # save previous
+            cf, cw = f, ww # start new cluster
     clusters.append((cf, cw))
     clusters.sort(key=lambda x: -x[1])  # by weight
-    return np.array([c[0] for c in clusters])
+    return np.array([c[0] for c in clusters]) # return only frequencies
 
 def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de MFSK différents (espacement, nombre de tons, SNR, dérive freq, etc)
     iq, fs, baud,
@@ -274,19 +275,19 @@ def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de
 
     # Window & frequency grid
     n = np.arange(N)
-    win = 0.5 - 0.5*np.cos(2*np.pi*n/(N-1))   # Hann
+    win = 0.5 - 0.5*np.cos(2*np.pi*n/(N-1))   # Hann window
     freqs = np.fft.fftshift(np.fft.fftfreq(nfft, 1/fs))
 
     # Tone detection over full spectrum with sub-bin interpolation
     obs_freqs = []
     obs_w = []
 
-    for start in range(0, len(iq)-N+1, H):
-        blk = iq[start:start+N] * win
+    for start in range(0, len(iq)-N+1, H): # frame start
+        blk = iq[start:start+N] * win # windowed block
         spec = np.fft.fftshift(np.fft.fft(blk, nfft))
         mag = np.abs(spec)
-        db = 20*np.log10(mag + 1e-12)
-        mx = np.max(db)
+        db = 20*np.log10(mag + 1e-12) # avoid log(0)
+        mx = np.max(db) # frame max in dB
 
         # Select all peaks within threshold of the frame's max
         height = mx - float(peak_thresh_db)
@@ -299,8 +300,8 @@ def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de
 
         for k in peaks:
             # Sub-bin interpolation
-            delta = parabolic_interpol(mag, k)
-            f_est = freqs[k] + delta * df
+            delta = parabolic_interpol(mag, k) # on linear magnitude
+            f_est = freqs[k] + delta * df # estimated freq in Hz
             obs_freqs.append(f_est)
             # Weight: use linear power as weight
             obs_w.append(mag[k]**2)
@@ -323,27 +324,27 @@ def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de
 
     starts = np.arange(0, len(iq)-N+1, H)
     T = len(starts)
-    tone_pows = np.empty((T, K), float)
+    tone_pows = np.empty((T, K), float) # per-frame tone powers
     times = np.empty(T, float)
 
     def agc_block(x):
-        r = np.sqrt(np.mean(np.abs(x)**2) + 1e-12)
+        r = np.sqrt(np.mean(np.abs(x)**2) + 1e-12) # RMS with small offset
         return x / r
 
     for i, s in enumerate(starts):
         blk = agc_block(iq[s:s+N])
-        c = (osc * blk).sum(axis=1)
+        c = (osc * blk).sum(axis=1) # matched filter outputs
         tone_pows[i] = np.abs(c)**2
-        times[i] = (s + (N-1)/2) / fs
+        times[i] = (s + (N-1)/2) / fs # center time of frame
 
     # Viterbi-like smoothing with simple switch penalty
-    dp = np.empty_like(tone_pows)
-    back = np.empty_like(tone_pows, dtype=np.int32)
+    dp = np.empty_like(tone_pows) # dynamic programming table
+    back = np.empty_like(tone_pows, dtype=np.int32) # backpointers
     dp[0] = tone_pows[0]
     back[0] = -1
     if K > 1:
-        pen = np.ones((K, K)) * switch_penalty
-        np.fill_diagonal(pen, 0.0)
+        pen = np.ones((K, K)) * switch_penalty # penalty matrix
+        np.fill_diagonal(pen, 0.0) # no penalty for staying on same tone
 
     for i in range(1, T):
         if K == 1:
@@ -352,14 +353,14 @@ def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de
         else:
             prev = dp[i-1][:, None] # (K,1)
             scores = prev - pen # (K,K): from j→k
-            j_star = np.argmax(scores, axis=0)
-            best_prev = scores[j_star, np.arange(K)]
-            dp[i] = best_prev + tone_pows[i]
+            j_star = np.argmax(scores, axis=0) # best previous tone for each current tone
+            best_prev = scores[j_star, np.arange(K)] # best scores
+            dp[i] = best_prev + tone_pows[i] # update dp
             back[i] = j_star
 
     # Backtrack
-    kT = int(np.argmax(dp[-1]))
-    tone_idx = np.empty(T, dtype=np.int32)
+    kT = int(np.argmax(dp[-1])) # best final tone
+    tone_idx = np.empty(T, dtype=np.int32) # tone index per frame
     for i in range(T-1, -1, -1):
         tone_idx[i] = kT
         kT = back[i, kT] if back[i, kT] >= 0 else kT
@@ -525,7 +526,7 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
 
     symbols = []
     for k in range(n_symbols):
-        idx = int(round(k * sps_exact + sps_exact / 2))
+        idx = int(round(k * sps_exact + sps_exact / 2)) # échantillon au centre du symbole
         if idx < len(recovered):
             symbols.append(recovered[idx])
     symbols = np.array(symbols)
@@ -669,7 +670,7 @@ def estimate_timing_phase(signal, sps, zero=0):
 
     for i in range(1, len(signal)):
         value = signal[i]
-        value_gt_zero = value >= zero
+        value_gt_zero = value >= zero # test de passage par zéro
 
         if value_gt_zero != last_gt_zero:
             # interp linéaire
@@ -681,7 +682,7 @@ def estimate_timing_phase(signal, sps, zero=0):
 
             # normalise l'angle
             angle = crossing * 2.0 * np.pi / sps
-            slope = abs(value - last_value)
+            slope = abs(value - last_value) # pente au crossing
             sum_cos += np.cos(angle) * slope
             sum_sin += np.sin(angle) * slope
 
@@ -690,5 +691,5 @@ def estimate_timing_phase(signal, sps, zero=0):
 
     # calcul de l'offset par moyenne vectorielle
     offset = np.arctan2(sum_sin, sum_cos)
-    offset *= sps / (2.0 * np.pi)
+    offset *= sps / (2.0 * np.pi) # conversion en échantillons
     return offset
