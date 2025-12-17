@@ -72,7 +72,7 @@ def compute_dsp(iq_wave, frame_rate, N=256, overlap=128, window_type='hann'):
         psd_sum += np.abs(fft_result) ** 2
     # Avg puissance sur les fenêtres
     psd = psd_sum / num_windows
-    psd /= (frame_rate * N)
+    psd /= frame_rate
     # Freq bins
     freqs = np.fft.fftfreq(N, d=1/frame_rate)
     psd /= np.sum(window**2)  # Correction fenêtrage
