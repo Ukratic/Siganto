@@ -79,8 +79,8 @@ menu_bar = tk.Menu(root)
 print("Chargement des fonctions...")
 # Init des variables
 filepath = None
-frame_rate = None
-iq_wave = None
+s_rate = None
+iq_sig = None
 bw = None
 mono_real = True
 convert_button = False
@@ -105,6 +105,27 @@ is_paused = False
 audio_thread = None
 audio_stream = None
 stream_position = 0
+# Autres params
+tau_modifier = 2 # multiplicateur de tau pour WPCR
+tau = np.pi * tau_modifier # constante tau pour WPCR
+precision = 0.9 # précision par défaut de recherche de rapidité de modulation
+filter_order = 4 # ordre des filtres par défaut (Butterworth)
+peak_prominence = 0.1 # proéminence des pics pour le centrage du signal
+morlet_fc = 6.0  # param de fréquence centrale par défaut pour ondelette de Morlet
+morlet_nfreq = 96  # nombre de fréquences par défaut pour CWT Morlet
+acf_min_distance = 25  # distance min par défaut pour ACF
+scf_alpha_step = 10  # pas alpha par défaut pour SCF
+costas_damping = 0.707  # facteur d'amortissement par défaut pour Costas
+costas_bw_factor = 0.01  # facteur de boucle bande passante par défaut pour Costas
+eye_num_traces = 500  # nombre de traces par défaut pour diagramme de l'oeil
+eye_channel = 'I'  # canal par défaut pour diagramme de l'oeil
+eye_symbols = 2 # nombre de symboles par défaut pour diagramme de l'oeil
+mfsk_tresh_db = 8  # seuil en dB par défaut pour MFSK
+mfsk_peak_prom_db = None  # proéminence des pics en dB par défaut pour MFSK
+mfsk_win_factor = 1.0  # facteur de taille de fenêtre par défaut pour MFSK
+mfsk_hop_factor = 0.25  # facteur de saut par défaut pour MFSK
+mfsk_bin_width_cluster_factor = 1.2 # facteur de largeur de bin par défaut pour MFSK
+mfsk_viterbi_penalty = 0.05  # pénalité Viterbi par défaut pour MFSK
 
 # Frame pour les graphes
 plot_frame = tk.Frame(root)
@@ -130,13 +151,13 @@ def find_sample_width(file_path):
     return bits_per_sample , audio_format
 
 def load_wav():
-    global filepath, frame_rate, iq_wave, N, overlap, corr, convert_button
+    global filepath, s_rate, iq_sig, N, overlap, corr, convert_button
     if filepath is None:
         filepath = tk.filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if not filepath:
         return
 
-    frame_rate, s_wave = wav.read(filepath)
+    s_rate, s_wave = wav.read(filepath)
 
     try:
         if s_wave.ndim == 2 and s_wave.shape[1] == 2:
@@ -145,7 +166,7 @@ def load_wav():
             right = s_wave[:, 1].astype(np.float32)
             # retire quelques échantillons pour éviter les erreurs si nécessaire
             min_len = min(len(left), len(right))
-            iq_wave = left[:min_len] + 1j * right[:min_len]
+            iq_sig = left[:min_len] + 1j * right[:min_len]
             # Vérification de corrélation entre les canaux gauche et droit
             corr = np.corrcoef(left, right)[0,1]
             if abs(corr) > 0.99:
@@ -153,23 +174,23 @@ def load_wav():
                     print("Attention: canaux droite & gauche identiques. On force en mono.")
                 mono_signal = left
                 analytic_signal = sm.hilbert(mono_signal)
-                iq_wave = analytic_signal
+                iq_sig = analytic_signal
             else:
-                iq_wave = left + 1j*right
+                iq_sig = left + 1j*right
         elif s_wave.ndim == 1:
             # Mono → 2 hypothèses
             if not convert_button:
                 load_mono_button.pack(side=tk.LEFT, padx=5)
                 convert_button = True
             if mono_real is True:
-                iq_wave = sm.hilbert(s_wave)
-                iq_wave = iq_wave * np.exp(-1j*2*np.pi*(frame_rate//4)*np.arange(len(iq_wave))/frame_rate)
-                iq_wave, frame_rate = sm.downsample(iq_wave, frame_rate, 2)
+                iq_sig = sm.hilbert(s_wave)
+                iq_sig = iq_sig * np.exp(-1j*2*np.pi*(s_rate//4)*np.arange(len(iq_sig))/s_rate)
+                iq_sig, s_rate = sm.downsample(iq_sig, s_rate, 2)
             else:
                 left = s_wave[0::2].astype(np.float32)
                 right = s_wave[1::2].astype(np.float32)
                 min_len = min(len(left), len(right))
-                iq_wave = left[:min_len] + 1j * right[:min_len]
+                iq_sig = left[:min_len] + 1j * right[:min_len]
 
         else:
             raise ValueError("Format WAV inattendu")
@@ -177,12 +198,12 @@ def load_wav():
         if debug is True:
             print("Erreur de conversion IQ")
         tk.messagebox.showerror(lang["error"], lang["wav_conversion"], parent=root)
-    if len(iq_wave) > 1e6: # si plus d'un million d'échantillons
+    if len(iq_sig) > 1e6: # si plus d'un million d'échantillons
         N = 4096
-    elif 1e5 < len(iq_wave) < 1e6 :
+    elif 1e5 < len(iq_sig) < 1e6 :
         N = 1024
-    elif len(iq_wave) < frame_rate: # si moins d'une seconde
-        N = (frame_rate//25)*(len(iq_wave)/frame_rate) # base de résolution = 25 Hz par défaut, proportionnellement à la durée si inférieur à 1 seconde
+    elif len(iq_sig) < s_rate: # si moins d'une seconde
+        N = (s_rate//25)*(len(iq_sig)/s_rate) # base de résolution = 25 Hz par défaut, proportionnellement à la durée si inférieur à 1 seconde
         N = (int(N/2))*2 # N pair de préférence
         if N < 4: # taille minimum de 4 échantillons
             N = 4
@@ -232,9 +253,9 @@ def clear_plot():
 
 # fonc fermeture du fichier, nettoie tout
 def close_wav():
-    global filepath, iq_wave
+    global filepath, iq_sig
     filepath = None
-    iq_wave = None
+    iq_sig = None
     clear_plot()
     # nettoie la mémoire
     gc.collect()
@@ -261,22 +282,22 @@ def plot_initial_graphs():
     if not filepath:
         print(lang["no_file"])
         return
-    freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice)
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
         tk.messagebox.showerror(lang["error"], lang["error_stft"], parent=root)
         return
-    ax[0].imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0], cmap='jet')
+    ax[0].imshow(stft_matrix, aspect='auto', extent = [s_rate/-2, s_rate/2, len(iq_sig)/s_rate, 0], cmap='jet')
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
     ax[0].set_title(f"{lang['window']} {window_choice}")
 
     # DSP
-    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N, overlap, window_choice)
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_sig, s_rate, N, overlap, window_choice)
     Pxx_shifted = np.fft.fftshift(Pxx) 
-    f_centered = np.linspace(-frame_rate/2, frame_rate/2, len(f)) # même échelle x que le spectrogramme
+    f_centered = np.linspace(-s_rate/2, s_rate/2, len(f)) # même échelle x que le spectrogramme
     ax[1].plot(f_centered, Pxx_shifted)
-    ax[1].set_xlim(-frame_rate/2, frame_rate/2)
+    ax[1].set_xlim(-s_rate/2, s_rate/2)
     ax[1].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[1].set_ylabel(lang["power_scale"])
     ax[1].axvline(x=fmax, color='r', linestyle='--')
@@ -312,9 +333,9 @@ def define_N():
 
 # # Autres groupe de graphes de base et flèches pour ajuster la fréquence centrale
 def plot_other_graphs():
-    global toolbar, ax, fig, canvas, iq_wave, original_iq_wave, fcenter, freq_label
+    global toolbar, ax, fig, canvas, iq_sig, original_iq_sig, fcenter, freq_label
     # Figure avec 3 sous-graphes. Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
-    original_iq_wave = iq_wave.copy() # copie du signal original pour les modifications
+    original_iq_sig = iq_sig.copy() # copie du signal original pour les modifications
     fcenter = 0  # Init de l'offset FC
     clear_plot()
     fig = plt.figure()
@@ -329,22 +350,22 @@ def plot_other_graphs():
         print(lang["no_file"])
         return
     # STFT
-    freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
-    stft = ax[0].imshow(stft_matrix, aspect='auto', extent=[frame_rate / -2, frame_rate / 2, len(iq_wave) / frame_rate, 0], cmap=cm.jet)
+    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    stft = ax[0].imshow(stft_matrix, aspect='auto', extent=[s_rate / -2, s_rate / 2, len(iq_sig) / s_rate, 0], cmap=cm.jet)
     ax[0].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
     ax[0].set_title(f"{lang['window']} {window_choice}")
 
     # Constellation
-    iq_constel = iq_wave/np.max(np.abs(iq_wave))
+    iq_constel = iq_sig/np.max(np.abs(iq_sig))
     line_constellation = ax[1].scatter(np.real(iq_constel), np.imag(iq_constel), s=1)
     ax[1].set_xlabel("In-Phase")
     ax[1].set_ylabel("Quadrature")
 
     # DSP avec max
-    wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
+    wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_sig)))**2
     wav_mag = wav_mag / np.max(wav_mag)
-    f = np.linspace(frame_rate / -2, frame_rate / 2, len(iq_wave)) # freq en Hz
+    f = np.linspace(s_rate / -2, s_rate / 2, len(iq_sig)) # freq en Hz
     line_spectrum, = ax[2].plot(f, wav_mag)
     ax[2].plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # point max
     ax[2].grid()
@@ -356,19 +377,19 @@ def plot_other_graphs():
     freq_label.pack(side=tk.BOTTOM, fill=tk.X)
 
     def update_graph():
-        global iq_wave, fcenter
-        # Recompute iq_wave avec l'offset de fréquence à partir de l'iq_wave original
-        iq_wave = original_iq_wave * np.exp(-1j * 2 * np.pi * fcenter * np.arange(len(original_iq_wave)) / frame_rate)
+        global iq_sig, fcenter
+        # Recompute iq_sig avec l'offset de fréquence à partir de l'iq_sig original
+        iq_sig = original_iq_sig * np.exp(-1j * 2 * np.pi * fcenter * np.arange(len(original_iq_sig)) / s_rate)
         # Màj label
         freq_label.config(text=f"{lang['offset_freq']}: {fcenter} Hz")
         # Màj STFT
-        freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+        freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice)
         stft.set_data(stft_matrix)
         # Màj constellation
-        iq_constel = iq_wave/np.max(np.abs(iq_wave))
+        iq_constel = iq_sig/np.max(np.abs(iq_sig))
         line_constellation.set_offsets(np.c_[np.real(iq_constel), np.imag(iq_constel)])
         # Màj DSP
-        wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
+        wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_sig)))**2
         wav_mag = wav_mag / np.max(wav_mag)
         line_spectrum.set_ydata(wav_mag)
 
@@ -439,7 +460,7 @@ def plot_3d_spectrogram():
         print(lang["no_file"])
         return
     # Génération du spectrogramme 3D 
-    freqs, times, spectrogram = mg.compute_spectrogram(iq_wave, frame_rate, N, window_func=window_choice)
+    freqs, times, spectrogram = mg.compute_spectrogram(iq_sig, s_rate, N, window_func=window_choice)
     spectrogram = spectrogram / np.max(spectrogram)  # normalisation
     X, Y = np.meshgrid(freqs, times)
     ax = plt.subplot(projection='3d')
@@ -468,8 +489,8 @@ def time_amplitude():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    time = np.arange(len(iq_wave)) / frame_rate
-    iq_norm = iq_wave / np.max(np.abs(iq_wave))
+    time = np.arange(len(iq_sig)) / s_rate
+    iq_norm = iq_sig / np.max(np.abs(iq_sig))
     ax.plot(time, iq_norm)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel(lang["norm_amplitude"])
@@ -493,7 +514,7 @@ def spectre_persistance():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    f, min_power, max_power, persistence = em.persistance_spectrum(iq_wave, frame_rate, N, persistance_bins, window_choice, overlap)
+    f, min_power, max_power, persistence = em.persistance_spectrum(iq_sig, s_rate, N, persistance_bins, window_choice, overlap)
     ax.imshow(persistence.T, aspect='auto', extent=[f[0], f[-1], 0, 1], origin='lower', cmap='jet')
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(lang["norm_power"])
@@ -576,13 +597,13 @@ def stft_solo():
         return
 
     ax = plt.subplot()
-    freqs, times, stft_matrix = mg.compute_stft(iq_wave, frame_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice)
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
         tk.messagebox.showerror(lang["error"], lang["error_stft"], parent=root)
         return
-    ax.imshow(stft_matrix, aspect='auto', extent = [frame_rate/-2, frame_rate/2, len(iq_wave)/frame_rate, 0],cmap=cm.jet)
+    ax.imshow(stft_matrix, aspect='auto', extent = [s_rate/-2, s_rate/2, len(iq_sig)/s_rate, 0],cmap=cm.jet)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(f"{lang['time_xy']} [s]")
     ax.set_title(f"{lang['window']} {window_choice}")
@@ -597,27 +618,27 @@ def stft_solo():
 # Affichage infos supplémentaires sur le signal : Mesures de puissance. Estimations de largeur de bande, rapidité de modulation & ACF.
 def display_frq_info():
     print(lang["frq_info"])
-    if iq_wave is None :
+    if iq_sig is None :
         if debug is True:
             print("Fichier non chargé")
         return
-    wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
-    f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave))
+    wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_sig)))**2
+    f = np.linspace(s_rate/-2, s_rate/2, len(iq_sig))
     f_pmax = f[np.argmax(wav_mag)]
     f_pmin = f[np.argmin(wav_mag)]
-    _, psd = mg.compute_dsp(iq_wave, frame_rate, N, overlap, window_choice)
+    _, psd = mg.compute_dsp(iq_sig, s_rate, N, overlap, window_choice)
     max_lvl = 10*np.log10(np.max(psd))
     low_lvl = 10*np.log10(np.min(psd))
     mean_lvl = 10*np.log10(np.mean(psd))
-    estim_speed_2 = round(np.abs(em.mean_threshold_spectrum(iq_wave, frame_rate)[2]),2)
-    estim_speed = round(np.abs(em.power_spectrum_envelope(iq_wave, frame_rate)[2]),2)
-    _,_,_, peak_squared_freq, peak_quartic_freq = em.power_series(iq_wave, frame_rate)
+    estim_speed_2 = round(np.abs(em.mean_threshold_spectrum(iq_sig, s_rate)[2]),2)
+    estim_speed = round(np.abs(em.power_spectrum_envelope(iq_sig, s_rate)[2]),2)
+    _,_,_, peak_squared_freq, peak_quartic_freq = em.power_series(iq_sig, s_rate)
     estim_speed_3 = [round(abs(peak_squared_freq),2),round(abs(peak_quartic_freq),2)]
-    _, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
+    _, freq_diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
     freq_diff /= np.max(np.abs(freq_diff))
-    estim_speed_4 = round(float(dm.estimate_baud_rate(freq_diff, frame_rate)),2)
-    estim_speed_5 = round(np.abs(em.envelope_spectrum(iq_wave, frame_rate)[2]),2)
-    acf_peak = round(np.abs(em.autocorrelation_peak(iq_wave, frame_rate, min_distance=25)[1]),2)
+    estim_speed_4 = round(float(dm.estimate_baud_rate(freq_diff, s_rate)),2)
+    estim_speed_5 = round(np.abs(em.envelope_spectrum(iq_sig, s_rate)[2]),2)
+    acf_peak = round(np.abs(em.autocorrelation_peak(iq_sig, s_rate, min_distance=acf_min_distance)[1]),2)
 
     # estimation de rapidité de modulation via différentes méthodes et indicateur de confiance
     confidence = 1
@@ -674,48 +695,48 @@ def display_file_info():
         info_label.config(text=lang["no_file"])
         return
     info_label.config(text=f"{filepath}. {lang['encoding']} {find_sample_width(filepath)[0]} bits. Format {find_sample_width(filepath)[1]}. \
-                      \n{lang['samples']} {len(iq_wave)}. {lang['sampling_frq']} {frame_rate} Hz. {lang['duree']}: {len(iq_wave)/frame_rate:.2f} sec.\
-                      \n {lang['fft_window']} {N}. Overlap : {overlap}. {lang['f_resol']} {frame_rate/N:.2f} Hz.")
+                      \n{lang['samples']} {len(iq_sig)}. {lang['sampling_frq']} {s_rate} Hz. {lang['duree']}: {len(iq_sig)/s_rate:.2f} sec.\
+                      \n {lang['fft_window']} {N}. Overlap : {overlap}. {lang['f_resol']} {s_rate/N:.2f} Hz.")
     if debug is True:
         print("Affichage des informations du fichier")
         print("Chargé: ", filepath)
         print("Encodage: ", find_sample_width(filepath)[0], " bits")
         print("Format: ", find_sample_width(filepath)[1])
-        print("Echantillons: ", len(iq_wave))
-        print("Fréquence d'échantillonnage: ", frame_rate, " Hz")
-        print("Durée: ", len(iq_wave)/frame_rate, " secondes")
+        print("Echantillons: ", len(iq_sig))
+        print("Fréquence d'échantillonnage: ", s_rate, " Hz")
+        print("Durée: ", len(iq_sig)/s_rate, " secondes")
         print("Taille fenêtre FFT: ", N)
         print("Recouvrement: ", overlap)
 
 # Fonctions de traitement du signal (filtres, déplacement de fréquence, sous-échantillonnage, sur-échantillonnage, coupure)
 def move_frequency():
     # déplacement de la fréquence centrale (valeur entrée par l'utilisateur)
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     fcenter = float(tk.simpledialog.askstring(lang["fc"], lang["move_txt"], parent=root))
     if fcenter is None:
         if debug is True:
             print("Modification de fréquence centrale annulée, valeur non définie")
         return
-    iq_wave = iq_wave * np.exp(-1j*2*np.pi*fcenter*np.arange(len(iq_wave))/frame_rate)
+    iq_sig = iq_sig * np.exp(-1j*2*np.pi*fcenter*np.arange(len(iq_sig))/s_rate)
     if debug is True:
         print("Fréquence centrale déplacée de ", fcenter, " Hz")
     plot_initial_graphs()
 
 def move_frequency_cursors():
     # déplacement de la fréquence centrale sur le curseur (inactif si 2 curseurs)
-    global cursor_points, iq_wave, frame_rate
+    global cursor_points, iq_sig, s_rate
     if len(cursor_points) != 1 and (cursor_points[0][0] != cursor_points[1][0]):
         tk.messagebox.showinfo(lang["error"], lang["1pt_cursors"], parent=root)
         return
     fcenter = cursor_points[0][0]
-    iq_wave = iq_wave * np.exp(-1j*2*np.pi*fcenter*np.arange(len(iq_wave))/frame_rate)
+    iq_sig = iq_sig * np.exp(-1j*2*np.pi*fcenter*np.arange(len(iq_sig))/s_rate)
     if debug is True:
         print("Fréquence centrale déplacée de ", fcenter, " Hz")
     plot_initial_graphs()
 
 def apply_filter_high_low():
     # passage d'un filtre passe-haut ou passe-bas
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
     popup.title(lang["high_low"])
@@ -734,16 +755,16 @@ def apply_filter_high_low():
             print("Filtre passe-", filter_type.get(), " non appliqué. Fréquence de coupure non définie")
         return
     if filter_type.get() == lang["low_val"]:
-        iq_wave = sm.lowpass_filter(iq_wave, float(cutoff.get()), frame_rate)
+        iq_sig = sm.lowpass_filter(iq_sig, float(cutoff.get()), s_rate, filter_order)
     elif filter_type.get() == lang["high_val"]:
-        iq_wave = sm.highpass_filter(iq_wave, float(cutoff.get()), frame_rate)
+        iq_sig = sm.highpass_filter(iq_sig, float(cutoff.get()), s_rate, filter_order)
     if debug is True:
         print("Filtre passe-", filter_type.get(), " appliqué. Fréquence de coupure: ", cutoff.get(), "Hz")
     plot_initial_graphs()
 
 def apply_filter_band():
     # passage d'un filtre passe-bande
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy()) 
     popup.title(lang["bandpass"])
@@ -762,14 +783,14 @@ def apply_filter_band():
     elif lowcut.get() == "" and highcut.get() == "":
         return
     else:
-        iq_wave = sm.bandpass_filter(iq_wave, float(lowcut.get()), float(highcut.get()), frame_rate)
+        iq_sig = sm.bandpass_filter(iq_sig, float(lowcut.get()), float(highcut.get()), s_rate, filter_order)
     if debug is True:
         print("Filtre passe-bande appliqué. Fréquence de coupure basse: ", lowcut.get(), "Hz. Fréquence de coupure haute: ", highcut.get(), "Hz")
     plot_initial_graphs()
 
 def mean_filter():
     # filtre moyenneur
-    global iq_wave
+    global iq_sig
     # popup pour choisir entre appliquer ou définir le seuil
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy()) 
@@ -778,9 +799,9 @@ def mean_filter():
     mean_filter = tk.StringVar()
     mean_filter.set(lang["not_apply"])
     # Afficher sur la popup la valeur de la variable
-    _, psd = mg.compute_dsp(iq_wave, frame_rate, N, overlap, window_choice)
+    _, psd = mg.compute_dsp(iq_sig, s_rate, N, overlap, window_choice)
     iq_floor = 10*np.log10(np.mean(psd))
-    iq_wave_db = 10*np.log10(np.abs(iq_wave)**2 / (frame_rate * N))
+    iq_sig_db = 10*np.log10(np.abs(iq_sig)**2 / (s_rate * N))
     tk.Label(popup, text=lang["mean_level"] + str(iq_floor)).pack()
     tk.Radiobutton(popup, text=lang["not_apply"], variable=mean_filter, value=lang["not_apply"]).pack()
     tk.Radiobutton(popup, text=lang["apply_mean"], variable=mean_filter, value=lang["apply_mean"]).pack()
@@ -789,7 +810,7 @@ def mean_filter():
     popup.wait_window()
     if mean_filter.get() == lang["def_level"]:
         iq_floor = float(tk.simpledialog.askstring(lang["level"], lang["enter_level"], parent=root))
-        iq_wave = np.where(iq_wave_db < iq_floor, 0, iq_wave)
+        iq_sig = np.where(iq_sig_db < iq_floor, 0, iq_sig)
         if iq_floor is None:
             if debug is True:
                 print("Seuil de moyennage non défini")
@@ -797,7 +818,7 @@ def mean_filter():
         if debug is True:
             print("Signal moyenné avec un seuil de ", iq_floor, " dB")
     elif mean_filter.get() == lang["apply_mean"]:
-        iq_wave = np.where(iq_wave_db < iq_floor, 0, iq_wave)
+        iq_sig = np.where(iq_sig_db < iq_floor, 0, iq_sig)
         if debug is True:
             print("Signal moyenné avec un seuil de ", iq_floor, " dB")
     else:
@@ -805,46 +826,46 @@ def mean_filter():
     
     print(lang["mean"])
     plot_initial_graphs()
-    del _, psd, iq_floor, iq_wave_db
+    del _, psd, iq_floor, iq_sig_db
 
 def downsample_signal():
     # sous-échantillonnage
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     rate = tk.simpledialog.askstring(lang["downsample"], lang["down_value"], parent=root)
     if rate is None:
         if debug is True:
             print("Taux de sous-échantillonnage non défini")
         return
     decimation_factor = int(rate)
-    iq_wave, frame_rate = sm.downsample(iq_wave, frame_rate, decimation_factor)
-    print(lang["sampling_frq"], frame_rate, "Hz")
+    iq_sig, s_rate = sm.downsample(iq_sig, s_rate, decimation_factor)
+    print(lang["sampling_frq"], s_rate, "Hz")
     plot_initial_graphs()
     display_file_info()
 
 def upsample_signal():
     # sur-échantillonnage
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     rate = tk.simpledialog.askstring(lang["upsample"], lang["up_value"], parent=root)
     if rate is None:
         if debug is True:
             print("Taux de sur-échantillonnage non défini")
         return
     oversampling_factor = int(rate)
-    iq_wave, frame_rate = sm.upsample(iq_wave, frame_rate, oversampling_factor)
-    print(lang["sampling_frq"], frame_rate, "Hz")
+    iq_sig, s_rate = sm.upsample(iq_sig, s_rate, oversampling_factor)
+    print(lang["sampling_frq"], s_rate, "Hz")
     plot_initial_graphs()
     display_file_info()
 
 def polyphase_resample():
     # rééchantillonnage par méthode polyphasée
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     new_fs = tk.simpledialog.askstring(lang["resample_poly"], lang["resample_value"], parent=root)
     if new_fs is None:
         if debug is True:
             print("Taux de rééchantillonnage non défini")
         return
     new_fs = int(new_fs)
-    iq_wave, frame_rate = sm.resample_polyphase(iq_wave, frame_rate, new_fs)
+    iq_sig, s_rate = sm.resample_polyphase(iq_sig, s_rate, new_fs)
     if debug is True:
         print("Signal rééchantillonné à ", new_fs, " Hz via méthode polyphasée")
     plot_initial_graphs()
@@ -852,7 +873,7 @@ def polyphase_resample():
 
 def cut_signal():
     # coupure du signal : entrer les points de début et de fin (en secondes)
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
     place_relative(popup, root, 300, 300)
@@ -871,55 +892,66 @@ def cut_signal():
     if start.get() =="":
         start = 0
     else:
-        start = int(float(start.get())*frame_rate)
+        start = int(float(start.get())*s_rate)
     if end.get() =="":
-        end = int((len(iq_wave)/frame_rate)*frame_rate)
+        end = int((len(iq_sig)/s_rate)*s_rate)
     else:
-        end = int(float(end.get())*frame_rate)
-    iq_wave = iq_wave[start:end]
+        end = int(float(end.get())*s_rate)
+    iq_sig = iq_sig[start:end]
     if debug is True:
         print("Signal coupé de ", start, "échantillons à ", end, "échantillons, soit ", end-start, "échantillons restants")
-        print("Nouvelle durée du signal : ", len(iq_wave)/frame_rate, " secondes")
+        print("Nouvelle durée du signal : ", len(iq_sig)/s_rate, " secondes")
     plot_initial_graphs()
     display_file_info()
 
 def cut_signal_cursors():
     # coupure du signal entre les 2 curseurs (ne prend en compte que la durée, pas l'écart en fréquence)
-    global iq_wave, frame_rate, cursor_points
+    global iq_sig, s_rate, cursor_points
     if len(cursor_points) < 2:
         tk.messagebox.showinfo(lang["error"], lang["2pt_cursors"], parent=root)
         return
     # signal coupé entre les 2 points. On ne sait pas quel point est le début et lequel est la fin, donc on prend les valeurs y les plus petites et les plus grandes
-    start = int(cursor_points[0][1]*frame_rate)
-    end = int(cursor_points[1][1]*frame_rate)
+    start = int(cursor_points[0][1]*s_rate)
+    end = int(cursor_points[1][1]*s_rate)
     print(cursor_points[1][1],cursor_points[0][1])   
     if cursor_points[1][1] < cursor_points[0][1]:
-        iq_wave = iq_wave[end:start]
+        iq_sig = iq_sig[end:start]
         if debug is True:
             print("Signal coupé de ", end, "échantillons à ", start, "échantillons, soit ", start-end, "échantillons restants")
-            print("Nouvelle durée du signal : ", len(iq_wave)/frame_rate, " secondes")
+            print("Nouvelle durée du signal : ", len(iq_sig)/s_rate, " secondes")
     else:
-        iq_wave = iq_wave[start:end]
+        iq_sig = iq_sig[start:end]
         if debug is True:
             print("Signal coupé de ", start, "échantillons à ", end, "échantillons, soit ", end-start, "échantillons restants")
-            print("Nouvelle durée du signal : ", len(iq_wave)/frame_rate, " secondes")
+            print("Nouvelle durée du signal : ", len(iq_sig)/s_rate, " secondes")
     plot_initial_graphs()
     display_file_info()
 
-def center_signal():
-    global iq_wave
+def center_signal_coarse():
+    global iq_sig
     if not filepath:
         print(lang["no_file"])
         return
-    # param de proeminence à ajuster
-    iq_wave, center = df.center_signal(iq_wave, frame_rate, prominence=0.1)
+    # param de proéminence à ajuster
+    iq_sig, center = df.center_signal(iq_sig, s_rate, prominence=peak_prominence)
     if debug is True:
-        print(f"Signal centré par déplacement de {round(center, 2)} Hz.")
+        print(f"Signal centré grossièrement par déplacement de {round(center, 2)} Hz.")
+
+    plot_initial_graphs()
+
+def center_signal_fine():
+    global iq_sig
+    if not filepath:
+        print(lang["no_file"])
+        return
+    iq_sig, center = df.estimate_carrier_weighted(iq_sig, s_rate)
+    if debug is True:
+        print(f"Signal centré finement par déplacement de {round(center, 2)} Hz.")
 
     plot_initial_graphs()
 
 def apply_doppler_correction():
-    global iq_wave
+    global iq_sig
     if not filepath:
         print(lang["no_file"])
         return
@@ -930,7 +962,7 @@ def apply_doppler_correction():
             print("Correction Doppler non appliquée, valeur non définie")
         return
     freq_offset = float(freq_offset)
-    iq_wave,_ = sm.doppler_lin_shift(iq_wave, frame_rate, 0, freq_offset)
+    iq_sig,_ = sm.doppler_lin_shift(iq_sig, s_rate, 0, freq_offset)
     if debug is True:
         print(f"Doppler appliqué avec une correction de {freq_offset} Hz.")
     plot_initial_graphs()
@@ -946,7 +978,7 @@ def psf():
     if not filepath:
         print(lang["no_file"])
         return
-    clock, f, peak_freq = em.power_spectrum_envelope(iq_wave, frame_rate)
+    clock, f, peak_freq = em.power_spectrum_envelope(iq_sig, s_rate)
     clock = clock / np.max(clock)
     ax = plt.subplot()
     ax.plot(f,np.abs(clock))
@@ -976,7 +1008,7 @@ def mts():
     if not filepath:
         print(lang["no_file"])
         return
-    clock, f, peak_freq = em.mean_threshold_spectrum(iq_wave, frame_rate)
+    clock, f, peak_freq = em.mean_threshold_spectrum(iq_sig, s_rate)
     clock = clock / np.max(clock)
     ax = plt.subplot()
     ax.plot(f,np.abs(clock))
@@ -1012,7 +1044,7 @@ def pseries():
     a0 = fig.add_subplot(spec[0, :])
     a1 = fig.add_subplot(spec[1, :])
     ax = (a0, a1)
-    f, squared, quartic, peak_squared_freq, peak_quartic_freq = em.power_series(iq_wave, frame_rate)
+    f, squared, quartic, peak_squared_freq, peak_quartic_freq = em.power_series(iq_sig, s_rate)
     squared = squared / np.max(squared)
     quartic = quartic / np.max(quartic)
     ax[0].plot(f, squared)
@@ -1050,8 +1082,8 @@ def cyclospectrum():
     if not filepath:
         print(lang["no_file"])
         return
-    f, cyclic_corr_avg, peak_freq = em.cyclic_spectrum_sliding_fft(iq_wave, frame_rate, window=window_choice, frame_len=N, step=overlap)
-    f = np.linspace(frame_rate/-2, frame_rate/2, len(cyclic_corr_avg))
+    f, cyclic_corr_avg, peak_freq = em.cyclic_spectrum_sliding_fft(iq_sig, s_rate, window=window_choice, frame_len=N, step=overlap)
+    f = np.linspace(s_rate/-2, s_rate/2, len(cyclic_corr_avg))
     cyclic_corr_avg = cyclic_corr_avg / np.max(cyclic_corr_avg)
     ax = plt.subplot()
     ax.plot(f,cyclic_corr_avg)
@@ -1083,7 +1115,7 @@ def envelope_spectrum():
     if not filepath:
         print(lang["no_file"])
         return
-    envelope, f, peak_freq = em.envelope_spectrum(iq_wave, frame_rate)
+    envelope, f, peak_freq = em.envelope_spectrum(iq_sig, s_rate)
     envelope = envelope / np.max(envelope)
     print(peak_freq)
     ax = plt.subplot()
@@ -1113,11 +1145,11 @@ def dsp():
     fig = plt.figure()
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
-    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N,overlap,window_choice)
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_sig, s_rate, N,overlap,window_choice)
     Pxx_shifted = np.fft.fftshift(Pxx) 
-    f_centered = np.linspace(-frame_rate/2, frame_rate/2, len(f)) # pas de point en dehors de la bande passante, donc évite les artefacts de bords
+    f_centered = np.linspace(-s_rate/2, s_rate/2, len(f)) # pas de point en dehors de la bande passante, donc évite les artefacts de bords
     ax.plot(f_centered, Pxx_shifted)
-    ax.set_xlim(-frame_rate/2, frame_rate/2)
+    ax.set_xlim(-s_rate/2, s_rate/2)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(lang["power_scale"])
     ax.axvline(x=fmax, color='r', linestyle='--')
@@ -1146,9 +1178,9 @@ def dsp_max():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_wave)))**2
+    wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_sig)))**2
     wav_mag = wav_mag / np.max(wav_mag)
-    f = np.linspace(frame_rate/-2, frame_rate/2, len(iq_wave)) # frq en Hz
+    f = np.linspace(s_rate/-2, s_rate/2, len(iq_sig)) # frq en Hz
     ax.plot(f, wav_mag)
     ax.plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # show max
     ax.grid()
@@ -1173,7 +1205,7 @@ def constellation():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    iq_constel = iq_wave/np.max(np.abs(iq_wave))
+    iq_constel = iq_sig/np.max(np.abs(iq_sig))
     ax.scatter(np.real(iq_constel), np.imag(iq_constel), s=1)
     ax.set_xlabel("In-Phase")
     ax.set_ylabel("Quadrature")
@@ -1197,11 +1229,11 @@ def autocorr():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    yx, lags = em.autocorrelation(iq_wave, frame_rate)
+    yx, lags = em.autocorrelation(iq_sig, s_rate)
     ax.plot(lags*1e3, yx/np.max(yx)) # lags en ms
     ax.set_xlabel("Lag [ms]")
     ax.set_ylabel(lang["autocorr"])
-    peak, time = em.autocorrelation_peak_from_acf(yx, lags, min_distance=25)
+    peak, time = em.autocorrelation_peak_from_acf(yx, lags, min_distance=acf_min_distance)
     ax.axvline(x=time, color='r', linestyle='--')
     ax.set_title(f"{lang['acf_peak_txt']} {round(time,4)} ms")
     if debug is True:
@@ -1230,8 +1262,8 @@ def autocorr_full():
     # Params cyclospectre
     if debug is True:
         print("Peut générer des ralentissements. Patienter")
-    yx, lags = em.full_autocorrelation(iq_wave)
-    ax.plot(lags/frame_rate*1e3, yx/np.max(yx)) # lags en ms
+    yx, lags = em.full_autocorrelation(iq_sig)
+    ax.plot(lags/s_rate*1e3, yx/np.max(yx)) # lags en ms
     ax.set_xlabel("Lag [ms]")
     ax.set_ylabel(lang["autocorr"])
 
@@ -1257,7 +1289,7 @@ def scf():
     ax = plt.subplot()
     if debug is True:
         print("Peut générer des ralentissements. Patienter")
-    scf, faxis, alphas = em.scf_tsm(iq_wave, frame_rate, N, window_choice, overlap, alpha_step_hz=10)
+    scf, faxis, alphas = em.scf_tsm(iq_sig, s_rate, N, window_choice, overlap, alpha_step_hz=scf_alpha_step)
     extent = (faxis[0], faxis[-1], alphas[-1], alphas[0])
     ax.imshow(scf, aspect='auto', extent=extent, cmap='jet', origin='upper')
     ax.set_xlabel(f"{lang["freq_xy"]} [Hz]")
@@ -1280,7 +1312,7 @@ def phase_difference():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    time, phase_diff = em.phase_time_angle(iq_wave, frame_rate, diff_window, window_choice)
+    time, phase_diff = em.phase_time_angle(iq_sig, s_rate, diff_window, window_choice)
     ax.plot(time, phase_diff)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel(f"{lang['diff_phase']} [rad]")
@@ -1304,7 +1336,7 @@ def freq_difference():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
+    time, freq_diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
     ax.plot(time, freq_diff)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel(f"{lang['freq_xy']} [Hz]") 
@@ -1329,7 +1361,7 @@ def phase_cumulative():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    hist, bins = em.phase_cumulative_distribution(iq_wave, num_bins=hist_bins)
+    hist, bins = em.phase_cumulative_distribution(iq_sig, num_bins=hist_bins)
     ax.plot(bins, hist)
     ax.set_xlabel("Phase [rad]")
     ax.set_ylabel(lang["density"])
@@ -1352,7 +1384,7 @@ def frequency_cumulative():
         print(lang["no_file"])
         return
     ax = plt.subplot()
-    hist, bins = em.frequency_cumulative_distribution(iq_wave, frame_rate, num_bins=hist_bins, window_size=diff_window, window_type=window_choice)
+    hist, bins = em.frequency_cumulative_distribution(iq_sig, s_rate, num_bins=hist_bins, window_size=diff_window, window_type=window_choice)
     ax.plot(bins, hist)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(lang["density"])
@@ -1391,8 +1423,8 @@ def morlet_wavelet():
         print("Génération de la transformée en ondelettes de Morlet")
         print("Peut générer des ralentissements. Patienter")
     ax = plt.subplot()
-    coefs, center_freqs = df.morlet_cwt(iq_wave, fs=frame_rate)
-    times = np.arange(coefs.shape[1]) / frame_rate
+    coefs, center_freqs = df.morlet_cwt(iq_sig, fs=s_rate, nfreq=morlet_nfreq, w=morlet_fc)
+    times = np.arange(coefs.shape[1]) / s_rate
     power = np.abs(coefs)
     power = power / np.max(power)
     im = ax.imshow(power, extent=[times[0], times[-1], center_freqs[0], center_freqs[-1]], aspect='auto', cmap='jet', origin='lower')
@@ -1421,7 +1453,7 @@ def alpha_from_symbol():
         return
     clear_plot()
     Tu = float(Tu)
-    peak, alpha, caf = em.estimate_alpha(iq_wave, frame_rate, Tu)
+    peak, alpha, caf = em.estimate_alpha(iq_sig, s_rate, Tu)
     fig = plt.figure()
     fig.suptitle(lang['alpha'])
     ax = plt.subplot()
@@ -1454,7 +1486,7 @@ def ofdm_results():
         return
     alpha_0 = float(alpha_0)
     dsp()
-    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_wave, frame_rate, N,overlap,window_choice)
+    bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_sig, s_rate, N,overlap,window_choice)
     # affiche BW estimée et demande de valider ou de redéfinir la bande passante
     popup = tk.Toplevel()
     place_relative(popup, root, 600, 100)
@@ -1502,7 +1534,7 @@ def ofdm_results():
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
     Pxx_shifted = np.fft.fftshift(Pxx) 
-    f_centered = np.linspace(-frame_rate/2, frame_rate/2, len(f)) # même échelle x que le spectrogramme
+    f_centered = np.linspace(-s_rate/2, s_rate/2, len(f)) # même échelle x que le spectrogramme
     ax.plot(f_centered, Pxx_shifted)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(lang["power_scale"])
@@ -1685,14 +1717,14 @@ def place_relative(popup, parent, w=300, h=200):
 
 # sauvegarde le signal (modifié ou non) en nouveau fichier wav
 def save_as_wav():
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     filename = tk.filedialog.asksaveasfilename(title=lang["save_wav"],defaultextension=".wav", filetypes=[("Waveform Audio File", "*.wav"), ("All Files", "*.*")])
     # Normalise les données IQ pour éviter le clipping
-    max_amplitude = np.max(np.abs(iq_wave))
+    max_amplitude = np.max(np.abs(iq_sig))
     if max_amplitude > 0:
-        iq_data_normalized = iq_wave / max_amplitude
+        iq_data_normalized = iq_sig / max_amplitude
     else:
-        iq_data_normalized = iq_wave
+        iq_data_normalized = iq_sig
     # Formate en 16 bits et sépare reel/imaginaire
     if debug is True:
         print("Conversion en 2 voies 16 bits")
@@ -1700,7 +1732,7 @@ def save_as_wav():
     imag_part = (iq_data_normalized.imag * 32767).astype(np.int16)
     # transforme reel+imag en 2 canaux pour le wav
     stereo_data = np.column_stack((real_part, imag_part))
-    wav.write(filename, frame_rate, stereo_data)
+    wav.write(filename, s_rate, stereo_data)
     if debug is True:
         print("Ecriture du nouveau wav")
 
@@ -1709,10 +1741,8 @@ def demod_cpm_psk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     # vars pour fonctions de démod
     target_rate = None
-    precision = 0.9
     order = None
     mapping = None
-    tau = np.pi * 2
     mod_type = None
     # on demande rapidité, ordre et mapping
     def toggle_mapping():
@@ -1795,7 +1825,7 @@ def demod_cpm_psk():
         mapping = list(eval(mapping))
 
     if modulation_type.get() == lang["demod_psk"]:
-        time, diff = em.phase_time_angle(iq_wave, frame_rate, diff_window, window_choice)
+        time, diff = em.phase_time_angle(iq_sig, s_rate, diff_window, window_choice)
         mod_type = "PSK"
         if debug is True:
             print("Démodulation PSK sélectionnée")
@@ -1812,10 +1842,10 @@ def demod_cpm_psk():
         try:
             if target_rate is not None:
                 clock = target_rate
-                bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray, differential=differential, offset=offset)
+                bits = dm.psk_demodulate(iq_sig, s_rate, clock, order, gray=gray, differential=differential, offset=offset, costas_damping=costas_damping, costas_bw_factor=costas_bw_factor)
             else:
-                clock = dm.estimate_baud_rate(diff, frame_rate)
-                bits = dm.psk_demodulate(iq_wave, frame_rate, clock, order, gray=gray, differential=differential, offset=offset)
+                clock = dm.estimate_baud_rate(diff, s_rate)
+                bits = dm.psk_demodulate(iq_sig, s_rate, clock, order, gray=gray, differential=differential, offset=offset, costas_damping=costas_damping, costas_bw_factor=costas_bw_factor)
             if differential and not offset:
                 alt_psk = "D"
             elif offset and not differential:
@@ -1832,14 +1862,14 @@ def demod_cpm_psk():
             bits = 0
 
     else:
-        time, diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
+        time, diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
         diff /= np.max(np.abs(diff))
         mod_type = "CPM/FSK"
         if debug is True:
             print("Démodulation FSK sélectionnée")
         # fonction de démod et slice bits en fonction de l'ordre
         try:
-            symbols, clock = dm.wpcr(diff, frame_rate, target_rate, tau, precision, debug)
+            symbols, clock = dm.wpcr(diff, s_rate, target_rate, tau, precision, debug)
             if len(symbols) > 2 and order == 2:
                 bits=dm.slice_binary(symbols)
                 if debug is True:
@@ -1915,13 +1945,13 @@ def demod_cpm_psk():
     del canvas, time, diff, bits, display_bits, bits_plot, formatted_bits, text_output, text_box
 
 def demod_fm():
-    global iq_wave
+    global iq_sig
     if not filepath:
         print(lang["no_file"])
         return
     # demod fm
     try:
-        iq_wave = dm.fm_demodulate(iq_wave,frame_rate)
+        iq_sig = dm.fm_demodulate(iq_sig,s_rate)
         if debug is True:
             print("Démodulation FM réalisée")
     except:
@@ -1931,13 +1961,13 @@ def demod_fm():
     plot_other_graphs()
 
 def demod_am():
-    global iq_wave
+    global iq_sig
     if not filepath:
         print(lang["no_file"])
         return
     # demod am
     try:
-        iq_wave = dm.am_demodulate(iq_wave)
+        iq_sig = dm.am_demodulate(iq_sig)
         if debug is True:
             print("Démodulation AM réalisée")
     except:
@@ -1949,15 +1979,12 @@ def demod_am():
 # EXPERIMENTAL
 def demod_mfsk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    time, freq_diff = em.frequency_transitions(iq_wave, frame_rate, diff_window, window_choice)
+    time, freq_diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
     freq_diff /= np.max(np.abs(freq_diff))
     # vars pour fonctions de démod
     target_rate = None
-    precision = 0.9
     mapping = None
-    return_format = "binary"  # par défaut, on renvoie les bits en binaire
     spacing = None # espacement entre les symboles. Pour l'instant pas utilisé
-    tau = np.pi
     # on demande rapidité, ordre, espacement et mapping    
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
@@ -1993,13 +2020,15 @@ def demod_mfsk():
     elif float(target_rate.get()) < 1:
         print("Pas de rapidité de démodulation définie. Essai aveugle")
         target_rate = None
-        clock = dm.estimate_baud_rate(freq_diff, frame_rate, target_rate, precision, debug)
+        clock = dm.estimate_baud_rate(freq_diff, s_rate, target_rate, precision, debug)
     else:
         clock = float(target_rate.get())
     order = int(param_order.get())
     if param_mapping.get() == lang["mapping_nat"]:
+        return_format = "binary"
         mapping = "natural"
     elif param_mapping.get() == lang["mapping_gray"]:
+        return_format = "binary"
         mapping = "gray"
     elif param_mapping.get() == lang["mapping_non-binary"]:
         mapping = "non-binary"
@@ -2009,12 +2038,12 @@ def demod_mfsk():
         if debug is True:
             print("Démodulation MFSK en cours...")
         if param_method.get() == "main":
-            symbols, clock = dm.wpcr(freq_diff, frame_rate, clock, tau, precision, debug)
+            symbols, clock = dm.wpcr(freq_diff, s_rate, clock, tau, precision, debug)
         elif param_method.get() == "alt":
         # EXPERIMENTAL
-            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_wave, frame_rate, clock, num_tones=order, peak_thresh_db=8, switch_penalty=0.05)       
+            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_sig, s_rate, clock, num_tones=order, peak_thresh_db=mfsk_tresh_db, peak_prominence=mfsk_peak_prom_db, win_factor=mfsk_win_factor, hop_factor=mfsk_hop_factor, merge_bins=mfsk_bin_width_cluster_factor, switch_penalty=mfsk_viterbi_penalty)       
             tone_freq /= np.max(np.abs(tone_freq))
-            symbols, _ = dm.wpcr(tone_freq, frame_rate, target_rate=None, tau=tau, precision=precision, debug=debug)
+            symbols, _ = dm.wpcr(tone_freq, s_rate, target_rate=None, tau=tau, precision=precision, debug=debug)
         if len(symbols) > 2:
             bits = dm.slice_mfsk(symbols, int(param_order.get()), mapping, return_format)
             if debug is True:
@@ -2092,7 +2121,7 @@ def demod_mfsk():
 
 # Filtres supplémentaires
 def apply_median_filter():
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     if not filepath:
         print(lang["no_file"])
         return
@@ -2122,7 +2151,7 @@ def apply_median_filter():
             kernel_size = 9
         elif kernel_size.get() == lang["dynamic_filter"]:
             symbol_rate = tk.simpledialog.askinteger(lang["median_filter"], "Bauds", minvalue=1, parent=root)
-            kernel_size = int(frame_rate / (symbol_rate * 2)) | 1
+            kernel_size = int(s_rate / (symbol_rate * 2)) | 1
         else:
             # Si l'utilisateur a choisi une option non reconnue, on affiche un message d'erreur
             tk.messagebox.showerror(lang["error"], lang["kernel_invalid"], parent=root)
@@ -2143,7 +2172,7 @@ def apply_median_filter():
                 print("La taille du noyau doit être un entier positif impair.")
             return
     try:
-        iq_wave = sm.median_filter(iq_wave, kernel_size)
+        iq_sig = sm.median_filter(iq_sig, kernel_size)
         if debug is True:
             print(f"Filtre médian de taille {kernel_size} appliqué")
     except Exception as e:
@@ -2152,7 +2181,7 @@ def apply_median_filter():
     plot_initial_graphs()
 
 def apply_moving_average():
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     if not filepath:
         print(lang["no_file"])
         return
@@ -2183,7 +2212,7 @@ def apply_moving_average():
             window_size = 21
         elif window_size.get() == lang["dynamic_filter"]:
             symbol_rate = tk.simpledialog.askinteger(lang["moving_average"], "Bauds", minvalue=1, parent=root)
-            window_size = int(frame_rate / (symbol_rate)) | 1
+            window_size = int(s_rate / (symbol_rate)) | 1
         else:
             # Si l'utilisateur a choisi une option non reconnue, on affiche un message d'erreur
             tk.messagebox.showerror(lang["error"], lang["window_invalid"], parent=root)
@@ -2199,7 +2228,7 @@ def apply_moving_average():
                 print("La taille de la fenêtre doit être un entier positif.")
             return
     try:
-        iq_wave = sm.moving_average(iq_wave, window_size)
+        iq_sig = sm.moving_average(iq_sig, window_size)
         if debug is True:
             print(f"Moyenne mobile de taille {window_size} appliquée")
     except Exception as e:
@@ -2208,17 +2237,17 @@ def apply_moving_average():
     plot_initial_graphs()
 
 def apply_fir_filter():
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     if not filepath:
         print(lang["no_file"])
         return
     # Demande la fréquence de coupure et le nombre de taps
-    cutoff_freq = tk.simpledialog.askfloat(lang["fir_filter"], lang["freq_pass"], minvalue=1, maxvalue=frame_rate/2, parent=root)
+    cutoff_freq = tk.simpledialog.askfloat(lang["fir_filter"], lang["freq_pass"], minvalue=1, maxvalue=s_rate/2, parent=root)
     num_taps = tk.simpledialog.askinteger(lang["fir_filter"], lang["fir_taps"], minvalue=1, parent=root)
     if cutoff_freq is None or num_taps is None:
         return
     try:
-        iq_wave = sm.fir_filter(iq_wave, frame_rate, cutoff_freq, 'lowpass', num_taps)
+        iq_sig = sm.fir_filter(iq_sig, s_rate, cutoff_freq, 'lowpass', num_taps)
         if debug is True:
             print(f"Filtre FIR avec fréquence de coupure {cutoff_freq} Hz et {num_taps} taps appliqué")
     except Exception as e:
@@ -2226,7 +2255,7 @@ def apply_fir_filter():
     plot_initial_graphs()
 
 def apply_wiener_filter():
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     if not filepath:
         print(lang["no_file"])
         return
@@ -2237,7 +2266,7 @@ def apply_wiener_filter():
     if noise is None and size is None:
         return # L'utilisateur a annulé. Une des 2 valeurs peut être nulle
     try:
-        iq_wave = sm.wiener_filter(iq_wave, size, noise)
+        iq_sig = sm.wiener_filter(iq_sig, size, noise)
         if debug is True:
             print(f"Filtre Wiener de taille {size} appliqué avec variance de bruit {noise}")
     except Exception as e:
@@ -2247,7 +2276,7 @@ def apply_wiener_filter():
 
 # Fonction pour appliquer un filtre adapté
 def apply_matched_filter():
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     if not filepath:
         print(lang["no_file"])
         return
@@ -2278,7 +2307,7 @@ def apply_matched_filter():
         factor = None
 
     try:
-        iq_wave = sm.matched_filter(iq_wave, frame_rate, symbol_rate, factor=factor, pulse_shape=pulse_shape)
+        iq_sig = sm.matched_filter(iq_sig, s_rate, symbol_rate, factor=factor, pulse_shape=pulse_shape)
         if debug:
             print(f"Filtre adapté appliqué: {pulse_shape}, facteur={factor}, rapidité={symbol_rate}")
     except Exception as e:
@@ -2302,8 +2331,8 @@ def eye_diagram():
         print("Pas de rapidité de modulation définie. Essai aveugle")
         symbol_rate = None
         try:
-            freq_diff = em.frequency_transitions(iq_wave, frame_rate, window_size=diff_window, window_type=window_choice)[1]
-            symbol_rate = dm.estimate_baud_rate(freq_diff, frame_rate, target_rate=baud_rate, precision=0.9, debug=debug)
+            freq_diff = em.frequency_transitions(iq_sig, s_rate, window_size=diff_window, window_type=window_choice)[1]
+            symbol_rate = dm.estimate_baud_rate(freq_diff, s_rate, target_rate=baud_rate, precision=precision, debug=debug)
             if symbol_rate is None or symbol_rate <= 0:
                 symbol_rate = baud_rate
             if debug is True:
@@ -2315,15 +2344,14 @@ def eye_diagram():
     else:
         symbol_rate = baud_rate
     try:
-        channel = "I" # pour l'instant, on ne fait que le canal I
-        time, traces, metrics = dm.eye_diagram_with_metrics(iq_wave, fs=frame_rate, baud_rate=symbol_rate, channel=channel, num_traces=500)
+        time, traces, metrics = dm.eye_diagram_with_metrics(iq_sig, s_rate, symbol_rate, eye_channel, eye_num_traces, eye_symbols)
         if debug is True:
             print("Diagramme de l'oeil calculé")
             print("Metriques: ", metrics)
         # plot
         clear_plot()
         fig = plt.figure()
-        fig.suptitle(f"{lang['eye_diagram']}. \n{lang['channel']} {channel}, {lang['symbol_rate']} : {symbol_rate}")
+        fig.suptitle(f"{lang['eye_diagram']}. \n{lang['channel']} {eye_channel}, {lang['symbol_rate']} : {symbol_rate}")
         ax = plt.subplot()
         for trace in traces:
             ax.plot(time, trace, color='blue', alpha=0.18)
@@ -2354,11 +2382,11 @@ def eye_diagram():
     del canvas, traces, time, metrics
 
 def shift_frequency():
-    global iq_wave, frame_rate
+    global iq_sig, s_rate
     # décale la fréquence centrale de la moitié de fréquence d'échantillonnage : prend en compte les fichiers encodés "à l'envers"
     if not filepath:
         return
-    iq_wave = iq_wave * ((-1) ** np.arange(len(iq_wave)))
+    iq_sig = iq_sig * ((-1) ** np.arange(len(iq_sig)))
     if debug is True:
         print("Décalage de fréquence Fe/2 appliqué")
     plot_initial_graphs()
@@ -2405,7 +2433,7 @@ def play_audio():
     global audio_stream, stream_position, is_playing, is_paused, total_samples
 
     try:
-        prepared_audio = prepare_audio(iq_wave) # suppose demodulation deja faite, on convertit en réel
+        prepared_audio = prepare_audio(iq_sig) # suppose demodulation deja faite, on convertit en réel
         total_samples = len(prepared_audio)
 
         def audio_callback(outdata, frames, time, status):
@@ -2436,7 +2464,7 @@ def play_audio():
             if stream_position >= total_samples:
                 stop_playback()
 
-        audio_stream = sd.OutputStream(callback=audio_callback, samplerate=frame_rate, channels=1, dtype='float32')
+        audio_stream = sd.OutputStream(callback=audio_callback, samplerate=s_rate, channels=1, dtype='float32')
         audio_stream.start()
 
     except:
@@ -2444,8 +2472,8 @@ def play_audio():
 
 def update_progress_bar():
     global stream_position, progress
-    if is_playing and not is_paused and iq_wave is not None:
-        progress_value = (stream_position / len(iq_wave)) * 100
+    if is_playing and not is_paused and iq_sig is not None:
+        progress_value = (stream_position / len(iq_sig)) * 100
         progress["value"] = min(progress_value, 100)
     root.after(100, update_progress_bar)  # Update 100 ms
 
@@ -2463,6 +2491,113 @@ def audio_output():
     progress = ttk.Progressbar(plot_frame, orient=tk.HORIZONTAL, length=300, mode='determinate')
     progress.pack(side=tk.LEFT, padx=5, pady=5)
     update_progress_bar()
+
+def advanced_settings():
+    # Distance min pour fc et nfreq pour CWT Morlet, 
+    # (db_thresh,win_factor,hop_factor,peak_prominence,cluster_bin_width_factor,viteri_penalty) pour détection de tons MFSK,
+    # eye diagram (num_traces, channel, symbols_per_trace), costas loop (zeta damping_factor,loop_bw_factor),
+    global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
+    global scf_alpha_step, costas_damping, costas_bw_factor, eye_channel, eye_num_traces, eye_symbols
+    global mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_viterbi_penalty, mfsk_bin_width_cluster_factor, mfsk_hop_factor
+    # Popup pour les paramètres avancés
+    popup = tk.Toplevel()
+    popup.title(lang["advanced_settings"])
+    place_relative(popup, root, 600, 750)
+    tk.Label(popup, text=lang["filter_order"]).pack()
+    filter_order_var = tk.IntVar(value=filter_order) # valeur initiale
+    tk.Entry(popup, textvariable=filter_order_var).pack() # ordre du filtre Butterworth
+    tk.Label(popup, text=lang["peak_prominence"]).pack()
+    peak_prominence_var = tk.DoubleVar(value=peak_prominence)
+    tk.Entry(popup, textvariable=peak_prominence_var).pack() # proéminence des pics pour centrage
+    tk.Label(popup, text=lang["acf_min_distance"]).pack()
+    acf_min_distance_var = tk.IntVar(value=acf_min_distance)
+    tk.Entry(popup, textvariable=acf_min_distance_var).pack() # distance min pour considérer pic ACF
+    tk.Label(popup, text=lang["tau_modifier"]).pack()
+    tau_modifier_var = tk.DoubleVar(value=tau_modifier)
+    tk.Entry(popup, textvariable=tau_modifier_var).pack() # modificateur de tau pour wpcr
+    tk.Label(popup, text=lang["precision"]).pack()
+    precision_var = tk.DoubleVar(value=precision)
+    tk.Entry(popup, textvariable=precision_var).pack() # précision pour recherche de rapidité
+    tk.Label(popup,text=lang["morlet_params"]).pack()
+    morlet_fc_var = tk.DoubleVar(value=morlet_fc)
+    morlet_nfreq_var = tk.IntVar(value=morlet_nfreq)
+    tk.Entry(popup, textvariable=morlet_fc_var).pack() # param fréquence centrale CWT Morlet
+    tk.Entry(popup, textvariable=morlet_nfreq_var).pack() # nombre de fréquences CWT Morlet
+    tk.Label(popup, text=lang["scf_alpha_step"]).pack()
+    scf_alpha_step_var = tk.IntVar(value=scf_alpha_step)
+    tk.Entry(popup, textvariable=scf_alpha_step_var).pack() # pas alpha pour SCF
+    tk.Label(popup, text=lang["costas_damping"]).pack()
+    costas_damping_var = tk.DoubleVar(value=costas_damping)
+    tk.Entry(popup, textvariable=costas_damping_var).pack() # facteur d'amortissement pour Costas
+    tk.Label(popup, text=lang["costas_bw_factor"]).pack()
+    costas_bw_factor_var = tk.DoubleVar(value=costas_bw_factor)
+    tk.Entry(popup, textvariable=costas_bw_factor_var).pack() # facteur de boucle bande passante pour Costas
+    tk.Label(popup, text=lang["eye_diagram_params"]).pack()
+    eye_channel_var = tk.StringVar(value=eye_channel)
+    eye_num_traces_var = tk.IntVar(value=eye_num_traces)
+    eye_symbols_var = tk.IntVar(value=eye_symbols)
+    tk.Entry(popup, textvariable=eye_channel_var).pack() # canal pour diagramme de l'oeil
+    tk.Entry(popup, textvariable=eye_num_traces_var).pack() # nombre de traces pour diagramme de l'oeil
+    tk.Entry(popup, textvariable=eye_symbols_var).pack() # nombre de symboles par trace pour diagramme de l'oeil
+    tk.Label(popup, text=lang["mfsk_tone_detection_params"]).pack()
+    tk.Label(popup, text=lang["mfsk_tresh_db"]).pack()
+    mfsk_tresh_db_var = tk.DoubleVar(value=mfsk_tresh_db)
+    tk.Entry(popup, textvariable=mfsk_tresh_db_var).pack() # seuil en dB pour démodulation MFSK
+    tk.Label(popup, text=lang["mfsk_peak_prom_db"]).pack()
+    mfsk_peak_prom_db_var = tk.DoubleVar(value=mfsk_peak_prom_db)
+    tk.Entry(popup, textvariable=mfsk_peak_prom_db_var).pack() # proéminence des pics pour démodulation MFSK
+    tk.Label(popup, text=lang["mfsk_win_factor"]).pack()
+    mfsk_win_factor_var = tk.DoubleVar(value=mfsk_win_factor)
+    tk.Entry(popup, textvariable=mfsk_win_factor_var).pack() # facteur de taille de fenêtre pour démodulation MFSK
+    tk.Label(popup, text=lang["mfsk_hop_factor"]).pack()
+    mfsk_hop_factor_var = tk.DoubleVar(value=mfsk_hop_factor)
+    tk.Entry(popup, textvariable=mfsk_hop_factor_var).pack() # facteur de saut pour démodulation MFSK
+    tk.Label(popup, text=lang["mfsk_cluster_bin_width_factor"]).pack()
+    mfsk_cluster_bin_width_factor_var = tk.DoubleVar(value=mfsk_bin_width_cluster_factor)
+    tk.Entry(popup, textvariable=mfsk_cluster_bin_width_factor_var).pack() # facteur de largeur de bin pour clustering dans démodulation MFSK
+    tk.Label(popup, text=lang["mfsk_viterbi_penalty"]).pack()
+    mfsk_viterbi_penalty_var = tk.DoubleVar(value=mfsk_viterbi_penalty)
+    tk.Entry(popup, textvariable=mfsk_viterbi_penalty_var).pack() # pénalité Viterbi pour démodulation MFSK
+
+    def save_settings():
+        nonlocal filter_order_var, peak_prominence_var, acf_min_distance_var, tau_modifier_var, precision_var
+        nonlocal morlet_fc_var, morlet_nfreq_var, scf_alpha_step_var, costas_damping_var, costas_bw_factor_var
+        nonlocal eye_channel_var, eye_num_traces_var, eye_symbols_var
+        nonlocal mfsk_tresh_db_var, mfsk_peak_prom_db_var, mfsk_win_factor_var, mfsk_viterbi_penalty_var
+        nonlocal mfsk_cluster_bin_width_factor_var, mfsk_hop_factor_var
+        global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
+        global scf_alpha_step, costas_damping, costas_bw_factor, eye_channel, eye_num_traces, eye_symbols
+        global mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_viterbi_penalty, mfsk_bin_width_cluster_factor, mfsk_hop_factor
+        filter_order = filter_order_var.get()
+        peak_prominence = peak_prominence_var.get()
+        acf_min_distance = acf_min_distance_var.get()
+        tau_modifier = tau_modifier_var.get()
+        precision = precision_var.get()
+        morlet_fc = morlet_fc_var.get()
+        morlet_nfreq = morlet_nfreq_var.get()
+        scf_alpha_step = scf_alpha_step_var.get()
+        costas_damping = costas_damping_var.get()
+        costas_bw_factor = costas_bw_factor_var.get()
+        eye_channel = eye_channel_var.get()
+        eye_num_traces = eye_num_traces_var.get()
+        eye_symbols = eye_symbols_var.get()
+        mfsk_tresh_db = mfsk_tresh_db_var.get()
+        mfsk_peak_prom_db = mfsk_peak_prom_db_var.get()
+        mfsk_win_factor = mfsk_win_factor_var.get()
+        mfsk_hop_factor = mfsk_hop_factor_var.get()
+        mfsk_bin_width_cluster_factor = mfsk_cluster_bin_width_factor_var.get()
+        mfsk_viterbi_penalty = mfsk_viterbi_penalty_var.get()
+        if debug is True:
+            print(f"Paramètres avancés mis à jour : "
+                  f"filter_order={filter_order}, peak_prominence={peak_prominence}, acf_min_distance={acf_min_distance}, "
+                  f"tau_modifier={tau_modifier}, precision={precision}, morlet_fc={morlet_fc}, morlet_nfreq={morlet_nfreq}, "
+                  f"scf_alpha_step={scf_alpha_step}, costas_damping={costas_damping}, costas_bw_factor={costas_bw_factor}, "
+                  f"eye_channel={eye_channel}, eye_num_traces={eye_num_traces}, eye_symbols={eye_symbols}, "
+                  f"mfsk_tresh_db={mfsk_tresh_db}, mfsk_peak_prom_db={mfsk_peak_prom_db}, mfsk_win_factor={mfsk_win_factor}, "
+                  f"mfsk_hop_factor={mfsk_hop_factor}, mfsk_bin_width_cluster_factor={mfsk_bin_width_cluster_factor}, "
+                  f"mfsk_viterbi_penalty={mfsk_viterbi_penalty}")
+        popup.destroy()
+    tk.Button(popup, text="OK", command=save_settings).pack()
 
 # Fonc de changement de langue. Recharge les labels des boutons et des menus. Couvre FR et EN uniquement
 def change_lang():
@@ -2524,6 +2659,7 @@ def load_lang_changes():
     param_submenu = tk.Menu(info_menu,tearoff=0)
     param_submenu.add_command(label=lang["param_spectre_persistance"], command=param_spectre_persistance)
     param_submenu.add_command(label=lang["param_hist_bins"],command=set_hist_bins)
+    param_submenu.add_command(label=lang["advanced_settings"], command=advanced_settings)
     info_menu.add_cascade(label=lang["params"], menu=param_submenu)
     # Changer langue. Label "English" si langue = fr, "Français" si langue = en
     lang_switch = "Switch language: English" if lang['lang'] == "Français" else "Changer langue: Français"
@@ -2533,7 +2669,8 @@ def load_lang_changes():
     move_submenu = tk.Menu(mod_menu,tearoff=0)
     move_submenu.add_command(label=lang["move_frq"], command=move_frequency)
     move_submenu.add_command(label=lang["move_freq_cursors"], command=move_frequency_cursors)
-    move_submenu.add_command(label=lang["auto_center"],command=center_signal)
+    move_submenu.add_command(label=lang["auto_center_coarse"],command=center_signal_coarse)
+    move_submenu.add_command(label=lang["auto_center_fine"],command=center_signal_fine)
     move_submenu.add_command(label=lang["doppler"], command=apply_doppler_correction)
     mod_menu.add_cascade(label=lang["center_frq"],menu=move_submenu)
     # Echantillonnage

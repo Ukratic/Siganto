@@ -113,6 +113,9 @@ Overlap.
 -- Added Envelope Spectrum & renamed some symbol rate graphs with a clearer title.<br>
 -- Automatic symbol rate estimation now has a confidence level.<br>
 
+- *V1.10b* :<br>
+-- Almost all parameters now accessible (options tab), no longer hardcoded.<br>
+
 ### Using the app
 1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>
 Built on top of base Python (>=3.9 with Tkinter), Numpy, Matplotlib and Scipy. Sounddevice & tkinterdnd2 are optional.<br>

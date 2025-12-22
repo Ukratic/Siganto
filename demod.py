@@ -473,12 +473,12 @@ def eye_diagram_with_metrics(samples, fs, baud_rate, channel="I", num_traces=500
 
     return time, traces, metrics
 
-def costas_loop(x, fs, loop_bandwidth, order=2):
+def costas_loop(x, fs, loop_bandwidth, order=2, damping=0.707):
     """Boucle de Costas : verrouillage de phase"""
     # Normalise amplitude & bw
     x = x/np.max(np.abs(x))
     Bn = loop_bandwidth / fs
-    zeta = 0.707  # damping
+    zeta = damping  # damping
     
     # Coefficients
     denom = 1 + 2*zeta*Bn + Bn**2
@@ -514,11 +514,11 @@ def costas_loop(x, fs, loop_bandwidth, order=2):
     
     return np.array(out)
 
-def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False, offset=False, pi4=False):
+def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False, offset=False, pi4=False, costas_damping=0.707, costas_bw_factor=0.01):
     """Démodulation BPSK/QPSK"""
     # Recup par boucle de Costas
-    bw_loop = symbol_rate * 0.01 # BW boucle sur critère de rapidité. Compromis actuel suppose RSB faible mais correct.
-    recovered = costas_loop(sig, fs, loop_bandwidth=bw_loop, order=order)
+    bw_loop = symbol_rate * costas_bw_factor # BW boucle sur critère de rapidité. Compromis actuel suppose RSB faible mais correct.
+    recovered = costas_loop(sig, fs, loop_bandwidth=bw_loop, order=order, damping=costas_damping)
 
     # Timing symbole, sps fractionnel
     sps_exact = fs / symbol_rate

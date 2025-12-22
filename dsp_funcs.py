@@ -61,13 +61,26 @@ def gaussian_window(N, sigma=0.4):
     n = np.arange(0, N)
     return np.exp(-0.5 * ((n - (N-1)/2) / (sigma * (N-1)/2))**2)
 
-def center_signal(iq_wave, frame_rate, prominence=0.1):
-    """Fonction de centrage du signal sur pics proéminents"""
-    N = len(iq_wave)
-    t = np.arange(N) / frame_rate
+def estimate_carrier_weighted(x, fs):
+    """Max vraisemblance : estimateur de fréquence porteuse avec mag**2 pondérée."""
+    x = x - np.mean(x)
 
-    spectrum = np.fft.fftshift(np.fft.fft(iq_wave))
-    f = np.fft.fftfreq(N, 1/frame_rate)
+    mag2 = np.abs(x)**2
+    dphi = np.angle(x[1:] * np.conj(x[:-1])) # différence de phase
+
+    weights = np.minimum(mag2[1:], mag2[:-1]) # pondération par mag² minimale
+    f_est = fs / (2 * np.pi) * np.sum(weights * dphi) / np.sum(weights) # estimation de la fréquence
+    t = np.arange(len(x)) / fs
+    iq_shifted = x * np.exp(-1j * 2 * np.pi * f_est * t) # recentrage du signal
+
+    return iq_shifted, f_est
+
+def center_signal(iq_sig, samp_rate, prominence=0.1):
+    """Fonction de centrage du signal sur pics proéminents"""
+    sig_len = len(iq_sig)
+    t = np.arange(sig_len) / samp_rate
+    spectrum = np.fft.fftshift(np.fft.fft(iq_sig))
+    f = np.fft.fftfreq(sig_len, 1/samp_rate)
     f = np.fft.fftshift(f)
 
     peaks_indices, _ = find_peaks(np.abs(spectrum), prominence=prominence)  # indices des pics
@@ -84,29 +97,29 @@ def center_signal(iq_wave, frame_rate, prominence=0.1):
     peak2_freq = peak_freqs[top_2_indices[1]]
     # calc & freq shift
     center_freq = (peak1_freq + peak2_freq) / 2
-    iq_shifted = iq_wave * np.exp(-1j * 2 * np.pi * center_freq * t)
+    iq_shifted = iq_sig * np.exp(-1j * 2 * np.pi * center_freq * t)
 
     return iq_shifted, center_freq
 
 def get_window(window_type, N):
     """Retourne la fenêtre appropriée selon le type"""
-    if window_type == 'flattop':
+    if window_type == 'flattop': # précision en amplitude
         return flattop_window(N)
-    elif window_type == 'blackmanharris7term':
+    elif window_type == 'blackmanharris7term': # réjection de lobes secondaires et haute dynamique, bon compromis
         return blackman_harris_7term_window(N)
-    elif window_type == 'hann':
+    elif window_type == 'hann': # cas général
         return np.hanning(N)
-    elif window_type == 'hamming':
+    elif window_type == 'hamming': # autre cas général adapté audio
         return np.hamming(N)
-    elif window_type == 'blackman':
+    elif window_type == 'blackman': # réjection de lobes secondaires
         return np.blackman(N)
-    elif window_type == 'kaiser':
-        return np.kaiser(N, beta=14)
-    elif window_type == 'bartlett':
+    elif window_type == 'kaiser': # trade-off adaptatif
+        return np.kaiser(N, beta=14) # beta=14 pour un bon compromis
+    elif window_type == 'bartlett': # triangulaire, lissage simple
         return np.bartlett(N)
-    elif window_type == 'rectangular':
+    elif window_type == 'rectangular': # pas de fenêtre
         return np.ones(N)
-    elif window_type == 'gaussian':
+    elif window_type == 'gaussian': # fenêtre gaussienne, réduction de bruit
         return gaussian_window(N)
     else:
         raise ValueError(f"Type de fenêtre inconnu : {window_type}")    
@@ -120,13 +133,13 @@ def morlet_wavelet(t, s, w=6.0):
     wave /= np.sqrt(np.sum(np.abs(wave)**2))  # normalisation de l'énergie
     return wave
 
-def morlet_cwt(iq_wave, fs, fmin=None, fmax=None, nfreq=96, w=6.0):
+def morlet_cwt(iq_sig, fs, fmin=None, fmax=None, nfreq=96, w=6.0):
     """ CWT Morlet avec convolution linéaire basée sur FFT.
-    coefs : coefficients complexes (nfreq x len(iq_wave))
+    coefs : coefficients complexes (nfreq x len(iq_sig))
     center_freqs : fréquences centrales de Morlet en pi rad/échantillon
     """
 
-    x = np.asarray(iq_wave)
+    x = np.asarray(iq_sig)
     N = len(x)
     dt = 1.0 / fs
 
