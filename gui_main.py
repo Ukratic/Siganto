@@ -641,6 +641,7 @@ def display_frq_info():
     acf_peak = round(np.abs(em.autocorrelation_peak(iq_sig, s_rate, min_distance=acf_min_distance)[1]),2)
 
     # estimation de rapidité de modulation via différentes méthodes et indicateur de confiance
+    # résultats exploitables sur canal unique dans le wav ou après filtrage
     confidence = 1
     if abs(estim_speed - estim_speed_4)/estim_speed_4 < 0.1:
         confidence +=1
@@ -648,20 +649,33 @@ def display_frq_info():
         confidence +=1
     if abs(estim_speed_3[0]*2 - estim_speed_4)/estim_speed_4 < 0.1:
         confidence +=1
-    if abs(estim_speed_3[1]*2 - estim_speed_4)/estim_speed_4 < 0.1:
+    if (abs(estim_speed_3[1]*4 - estim_speed_4)/estim_speed_4 < 0.1) or (abs(estim_speed_3[1]*2 - estim_speed_4)/estim_speed_4 < 0.1) :
         confidence +=1
     if abs(estim_speed_5 - estim_speed_4)/estim_speed_4 < 0.1:
         confidence +=1
+    estim_speed_6 = round(np.mean([estim_speed,estim_speed_2,estim_speed_5]),2)
+    other_conf_a = abs(estim_speed_2 - estim_speed)/estim_speed_2 + abs(estim_speed_3[1]*4 - estim_speed_5)/(estim_speed_3[1]*4)
+    other_conf_b = abs(estim_speed_2 - estim_speed)/estim_speed_2 + abs(estim_speed_3[0]*2 - estim_speed_5)/(estim_speed_3[0]*2)
 
-    if confidence < 2:
+    if confidence <= 1 and (estim_speed_6-estim_speed_5 < 0.1 or estim_speed_6-estim_speed < 0.1 or estim_speed_6-estim_speed_2 < 0.1):
+        confidence_level = lang['low_confidence']
+        estim_speed_ag = f"{estim_speed_5} Bds ({confidence_level})"
+    elif confidence <= 1 and (other_conf_a <= 0.1 or other_conf_b <= 0.1) :
+        confidence_level = lang['low_confidence']
+        estim_speed_ag = f"{estim_speed_5} Bds ({confidence_level})"
+    elif confidence < 2:
         confidence_level = lang['low_confidence']
         estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
     elif confidence >= 2 and confidence < 3:
         confidence_level = lang['medium_confidence']
         estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
-    elif confidence >= 3:
+    elif confidence >= 3 and confidence <= 4:
         confidence_level = lang['high_confidence']
         estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
+    elif confidence >= 5:
+        confidence_level = lang['v_high_confidence']
+        estim_speed_ag = f"{round(np.mean([estim_speed_6,estim_speed_4]),2)} Bds ({confidence_level})"
+        
 
     popup = tk.Toplevel()
     popup.title(lang["frq_info"])
@@ -682,9 +696,10 @@ def display_frq_info():
         print("Niveau moyen en dB: ", mean_lvl)
         print("Largeur de bande estimée: ", bw, " Hz")
         print("Rapidité de modulation estimée avec la fonction mts: ", estim_speed_2, " Bauds")
-        print("Rapidité de modulation avec la FFT de puissance classique: ", estim_speed, " Bauds")
+        print("Rapidité de modulation estimée par spectre de puissance: ", estim_speed, " Bauds")
         print("Rapidité de modulation estimée par signal puissance: ", estim_speed_3[0]*2, "/", estim_speed_3[1]*2, "Bauds")
         print("Rapidité de modulation estimée par transitions de fréquence: ", estim_speed_4, " Bauds")
+        print("Rapidité de modulation estimée par spectre de l'enveloppe: ", estim_speed_5, " Bauds")
         print("Confiance dans l'estimation de rapidité de modulation: ", confidence, "/5")
         print("Autocorrélation estimée: ", acf_peak, " ms")
     del _,estim_speed,estim_speed_2, wav_mag, f, f_pmax, f_pmin, max_lvl, low_lvl, mean_lvl, freq_diff, acf_peak
