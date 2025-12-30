@@ -230,7 +230,7 @@ def get_fra_lib():
         "power_scale" : "Puissance [dB/Hz]",
         "norm_power" : "Puissance (normalisée)",
         "norm_amplitude" : "Amplitude (normalisée)",
-        "envelope_spectrum": "Spectre de l'enveloppe",
+        "envelope_spectrum": "Spectre de puissance de l'enveloppe",
         "speed_estimate": "Mesures Rapidité",
         "resample_value": "Entrer la nouvelle fréquence d'échantillonnage (Hz) :",
         "resample_poly": "Rééchantillonnage polyphasé",
@@ -252,7 +252,9 @@ def get_fra_lib():
         "mfsk_viterbi_penalty": "Pénalité Viterbi [float]",
         "mfsk_cluster_bin_width_factor": "Facteur de largeur de bin pour le clustering [float]",
         "mfsk_hop_factor": "Facteur de saut (fraction de la taille de fenêtre) [float]",
-
+        "ssb_choice": "Sélectionner LSB ou USB pour la démodulation SSB",
+        "demod_ssb": "Démodulation SSB",
+        
     }
     return fra_lib
 
@@ -486,7 +488,7 @@ def get_eng_lib():
         "power_scale" : "Power [dB/Hz]",
         "norm_power" : "Power (normalized)",
         "norm_amplitude" : "Amplitude (normalized)",
-        "envelope_spectrum": "Envelope Spectrum",
+        "envelope_spectrum": "Envelope Power Spectrum",
         "speed_estimate": "Symbol Rate Metrics",
         "resample_value": "Enter the new sampling frequency (Hz) :",
         "resample_poly": "Polyphase Resampling",
@@ -508,6 +510,8 @@ def get_eng_lib():
         "mfsk_viterbi_penalty": "Viterbi penalty for MFSK demodulation [float]",
         "mfsk_cluster_bin_width_factor": "Bin width factor for clustering in MFSK demodulation [float]",
         "mfsk_hop_factor": "Hop factor for MFSK demodulation (fraction of window size) [float]",
+        "ssb_choice": "Select LSB or USB for SSB demodulation",
+        "demod_ssb": "SSB Demodulation",
 
     }
     return eng_lib

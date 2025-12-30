@@ -5,7 +5,7 @@ Date: 2024-11-21
 
 Description: GUI for signal analysis using Python. 3 libraries are used: tkinter, matplotlib, and scipy.
 The GUI allows the user to load a WAV file, display its spectrogram, DSP, and other graphs.
-Also, some signal modification functions : apply filters, cut the signal, move center frequency.
+Also, some signal modification functions : apply filters, cut the signal, move center frequency...
 And some estimations, mostly through graphs : Modulation, symbol rate, bandwidth, OFDM parameters.
 
 Many thanks to Dr Marc Lichtman - University of Maryland. Author of PySDR.
@@ -62,7 +62,7 @@ else:
     root = tk.Tk()
 root.withdraw()
 loading_screen = tk.Toplevel(root)
-loading_screen.title("SigAnTo")
+loading_screen.title("SigAnTo v1.10")
 loading_screen.geometry("250x100")
 loading_label = tk.Label(loading_screen, text="Loading...")
 loading_label.pack()
@@ -1991,6 +1991,33 @@ def demod_am():
             return
     plot_other_graphs()
 
+def demod_ssb():
+    global iq_sig
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # demande choix LSB/USB
+    ssb_choice = tk.StringVar()
+    popup = tk.Toplevel()
+    popup.bind("<Return>", lambda event: popup.destroy())
+    place_relative(popup, root, 400, 100)
+    popup.title(lang["ssb_choice"])
+    tk.Radiobutton(popup, text="LSB", variable=ssb_choice, value="LSB").pack()
+    tk.Radiobutton(popup, text="USB", variable=ssb_choice, value="USB").pack()
+    ssb_choice.set("None")
+    tk.Button(popup, text="OK", command=popup.destroy).pack()    
+    popup.wait_window()
+    # demod ssb
+    try:
+        iq_sig = dm.ssb_to_iq(iq_sig, s_rate, ssb_choice.get())
+        if debug is True:
+            print(f"Démodulation {ssb_choice.get()} réalisée")
+    except:
+        if debug is True:
+            print(f"Echec de démodulation SSB : {ssb_choice.get()}")
+            return
+    plot_other_graphs()
+
 # EXPERIMENTAL
 def demod_mfsk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
@@ -2750,6 +2777,7 @@ def load_lang_changes():
     demod_menu.add_command(label=lang["demod_cpm_psk"], command=demod_cpm_psk)
     demod_menu.add_command(label=lang["demod_fm"], command=demod_fm)
     demod_menu.add_command(label=lang["demod_am"], command=demod_am)
+    demod_menu.add_command(label=lang["demod_ssb"], command=demod_ssb)
     demod_menu.add_command(label=lang["demod_mfsk"], command=demod_mfsk)
     # Audio
     if with_sound:

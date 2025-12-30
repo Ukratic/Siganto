@@ -164,6 +164,21 @@ def am_demodulate(iq_signal):
     # Détection d'enveloppe
     return np.abs(iq_signal)
 
+def ssb_to_iq(iq, fs, sideband="USB"):
+    """Convertit un signal SSB (USB/LSB) en IQ en supprimant la bande latérale non désirée."""
+    sig_len = len(iq)
+    spectrum = np.fft.fft(iq)
+    freqs = np.fft.fftfreq(sig_len, 1/fs)
+
+    if sideband == "USB":
+        spectrum[freqs < 0] = 0
+    elif sideband == "LSB":
+        spectrum[freqs > 0] = 0
+    else:
+        raise ValueError("sideband must be 'USB' or 'LSB'")
+
+    return np.fft.ifft(spectrum)
+
 def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
     """Convertit les symboles MFSK en bits selon le mapping spécifié."""
     symbols = np.asarray(symbols, dtype=float)
