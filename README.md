@@ -11,12 +11,13 @@ Be aware that the entire file is displayed, not looped over in chunks as many ot
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_1.png" alt="Main"/>
 
 ### Available functions
-#### 1. Display
+#### 1. Display & Settings
 - Load a .wav file. The button reloads the same file if clicked again. Select the button next to it to close the .wav file before loading another.<br>
 Spectrogram & PSD shown when a file is loaded. With the V1.09 dependency, loading a wav file can be done by drag & drop.
 - Activate measuring cursors (deactivated by default upon loading a new graph). Distance between 2 cursors is shown and you can also jump to a nearby peak (button in bottom right).
 - Change language (English and French available)
 - Display frequency & power information of the signal file (Estimated BW, dB level, symbol rate & ACF)
+- Advanced Settings : Modify parameters not directly available on each graph/function.
 #### 2. Signal modification
 - Change FFT parameters :<br>
 Window size (default based on number of samples), <br>
@@ -53,36 +54,36 @@ Overlap.
 - Phase Transitions
 - Eye Diagram (not synchronized)
 #### 8. Symbol Rate Metrics
-- Envelope Specturm
+- Envelope Power Specturm
 - Power Envelope Spectrum
 - Clock Transition Spectrum
-- Power Order (2&4) Spectrum
+- Power Order (2 & 4) Spectrum
 - Cyclospectrum
 #### 9. Cyclostationarity Metrics
-- Autocorrelation function (fft-based fast variant or complete)
+- Autocorrelation function (FFT-based fast variant or complete)
 - Spectral Correlation function
 #### 10. OFDM Metrics
 - Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
 #### 11. Demodulation
 - 2 or 4 CPM/FSK & PSK Demodulation (with optional baud rate estimation)
-- AM & FM Demodulation (visual output and result signal saved for audio playback, further analysis or demodulation)
+- AM, FM & SSB Demodulation (visual output and result signal saved for audio playback, further analysis or demodulation)
 - MFSK Demodulation (2 methods : tone detection or from smoothed frequency transitions)
 #### 12. Audio
-- Audio playback (you may need to choose the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded)
+- Audio playback (first pick the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded)
 
 ### Examples :
 - Spectrogram of a Chinese 4+4 <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.png" alt="4_4"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_2.png" alt="Spectrogram"/>
 - dPMR Constellation <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.png" alt="dPMR"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_3.png" alt="Constellation"/>
 - PSD of CIS-FTM4 <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="CIS-FTM4"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_4.png" alt="PSD"/>
 - TETRA Symbol rate <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_5.png" alt="TETRA"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_5.png" alt="Symbol_rate"/>
 - TETRAPOL Autocorrelation Function <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_6.png" alt="TETRAPOL"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_6.png" alt="ACF"/>
 - CIS-45 OFDM Parameters <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="CIS-45"/>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="OFDM_params"/>
 - EDACS Frequency transitions <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_8.png" alt="FSK_transitions"/>
 - AIS Demodulation <br>
@@ -113,8 +114,9 @@ Overlap.
 -- Added Envelope Spectrum & renamed some symbol rate graphs with a clearer title.<br>
 -- Automatic symbol rate estimation now has a confidence level.<br>
 
-- *V1.10b* :<br>
+- *V1.10b-d* :<br>
 -- Almost all parameters now accessible (options tab), no longer hardcoded.<br>
+-- SSB demod .<br>
 
 ### Using the app
 1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>
