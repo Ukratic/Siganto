@@ -3,7 +3,9 @@ SigAnTo - Signal Analysis Toolbox - GUI
 Author: Arnaud Barraquand (@Ukratic)
 Date: 2024-11-21
 
-Description: GUI for signal analysis using Python. 3 libraries are used: tkinter, matplotlib, and scipy.
+Description: GUI for signal analysis using Python. 
+4 main libraries are used: tkinter, matplotlib, numpy & scipy.
+Everything else is either a custom module or optional.
 The GUI allows the user to load a WAV file, display its spectrogram, DSP, and other graphs.
 Also, some signal modification functions : apply filters, cut the signal, move center frequency...
 And some estimations, mostly through graphs : Modulation, symbol rate, bandwidth, OFDM parameters.
@@ -22,10 +24,11 @@ drag_drop = True
 if drag_drop is True:
     from tkinterdnd2 import TkinterDnD, DND_FILES
 
-# Initialisation : chargement des librairies et de la langue dans une fonction pour pouvoir l'intégrer dans un thread
-# Ce thread permet de charger les librairies en arrière-plan avec une fenêtre de chargement, en attendant que tout soit prêt
 loading_end = Event()
 def loading_libs():
+    """Fonction de chargement des librairies et de la langue, 
+    dans un thread pour afficher une fenêtre de chargement.
+    En attendant que tout soit prêt, la fenêtre de chargement reste affichée."""
     # Librairies
     print("Chargement des dépendances...")
     global struct, gc, FigureCanvasTkAgg, NavigationToolbar2Tk, plt, cm, np, wav, ll, em, lang, mg, sm, df, dm, scrolledtext, ttk, sd, string
@@ -52,7 +55,7 @@ def loading_libs():
     lang = ll.get_fra_lib()
     # loading_end.wait() à la fin du script
     loading_end.set()
-    
+
 # Fenêtre de chargement
 t = Thread(target=loading_libs, daemon=True)
 t.start()
@@ -133,10 +136,12 @@ plot_frame.pack(fill=tk.BOTH, expand=True)
 
 # Fonctions de chargement de fichier WAV
 def find_sample_width(file_path):
-    # Fonc de détermination d'encodage WAV
+    """Lit les 44 premiers bytes du fichier WAV,
+    pour trouver le nombre de bits par échantillon et le format d'encodage."""
     with open(file_path,'rb') as wav_file:
         header = wav_file.read(44) # Premiers 44 bytes = réservés header
-        if header[:4] != b'RIFF' or header[8:12] != b'WAVE' or header[12:16] != b'fmt ': # vérifie si c'est un fichier WAV
+        # vérifie si c'est un fichier WAV standard et lit les infos d'encodage
+        if header[:4] != b'RIFF' or header[8:12] != b'WAVE' or header[12:16] != b'fmt ': 
             tk.messagebox.showerror(lang["error"], lang["invalid_wav"], parent=root)
             raise ValueError(lang["invalid_wav"])
         bits_per_sample  = struct.unpack('<H', header[34:36])[0]
@@ -151,6 +156,8 @@ def find_sample_width(file_path):
     return bits_per_sample , audio_format
 
 def load_wav():
+    """Charge un fichier WAV, convertit en I/Q,
+    et affiche les graphes initiaux."""
     global filepath, s_rate, iq_sig, N, overlap, corr, convert_button
     if filepath is None:
         filepath = tk.filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
@@ -161,12 +168,13 @@ def load_wav():
 
     try:
         if s_wave.ndim == 2 and s_wave.shape[1] == 2:
-            # Fichier stéréo → on suppose I/Q sur 2 canaux
+            # Fichier stéréo : on suppose I/Q sur 2 canaux
             left = s_wave[:, 0].astype(np.float32)
             right = s_wave[:, 1].astype(np.float32)
-            # retire quelques échantillons pour éviter les erreurs si nécessaire
+            # on assure le même nb d'échantillons pour éviter les erreurs
             min_len = min(len(left), len(right))
-            iq_sig = left[:min_len] + 1j * right[:min_len]
+            left = left[:min_len]
+            right = right[:min_len]
             # Vérification de corrélation entre les canaux gauche et droit
             corr = np.corrcoef(left, right)[0,1]
             if abs(corr) > 0.99:
@@ -175,18 +183,18 @@ def load_wav():
                 mono_signal = left
                 analytic_signal = sm.hilbert(mono_signal)
                 iq_sig = analytic_signal
-            else:
+            else: # si les canaux sont différents, on suppose qu'ils contiennent bien I et Q
                 iq_sig = left + 1j*right
         elif s_wave.ndim == 1:
-            # Mono → 2 hypothèses
+            # Mono : 2 hypothèses
             if not convert_button:
                 load_mono_button.pack(side=tk.LEFT, padx=5)
                 convert_button = True
-            if mono_real is True:
+            if mono_real is True: # signal réel à convertir en IQ via transformée de Hilbert
                 iq_sig = sm.hilbert(s_wave)
                 iq_sig = iq_sig * np.exp(-1j*2*np.pi*(s_rate//4)*np.arange(len(iq_sig))/s_rate)
                 iq_sig, s_rate = sm.downsample(iq_sig, s_rate, 2)
-            else:
+            else: # signal déjà échantillonné en I/Q sur un seul canal (alternance I/Q)
                 left = s_wave[0::2].astype(np.float32)
                 right = s_wave[1::2].astype(np.float32)
                 min_len = min(len(left), len(right))
@@ -203,14 +211,15 @@ def load_wav():
     elif 1e5 < len(iq_sig) < 1e6 :
         N = 1024
     elif len(iq_sig) < s_rate: # si moins d'une seconde
-        N = (s_rate//25)*(len(iq_sig)/s_rate) # base de résolution = 25 Hz par défaut, proportionnellement à la durée si inférieur à 1 seconde
+        # base de résolution = 25 Hz par défaut, proportionnellement à la durée si > 1 seconde
+        N = (s_rate//25)*(len(iq_sig)/s_rate) 
         N = (int(N/2))*2 # N pair de préférence
         if N < 4: # taille minimum de 4 échantillons
             N = 4
     else:
         N = 512 # taille de fenêtre FFT par défaut
     overlap = N//overlap_value
-        
+
     display_file_info()
     # Plot graphes initiaux après chargement du fichier
     plot_initial_graphs()
@@ -220,7 +229,7 @@ def on_file_drop(event):
     files = root.tk.splitlist(event.data)  # handles spaces in file names
     if files:
         filepath = files[0]  # take first dropped file
-        load_wav()    
+        load_wav()
 
 def load_real():
     global mono_real
@@ -277,7 +286,7 @@ def plot_initial_graphs():
     a1 = fig.add_subplot(spec[2, :])
     ax = (a0, a1)
 
-    # Spectrogramme 
+    # Spectrogramme
     print(lang["spec_dsp"])
     if not filepath:
         print(lang["no_file"])
@@ -294,7 +303,7 @@ def plot_initial_graphs():
 
     # DSP
     bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_sig, s_rate, N, overlap, window_choice)
-    Pxx_shifted = np.fft.fftshift(Pxx) 
+    Pxx_shifted = np.fft.fftshift(Pxx)
     f_centered = np.linspace(-s_rate/2, s_rate/2, len(f)) # même échelle x que le spectrogramme
     ax[1].plot(f_centered, Pxx_shifted)
     ax[1].set_xlim(-s_rate/2, s_rate/2)
@@ -306,7 +315,7 @@ def plot_initial_graphs():
         print("Bande passante estimée: ", bw, " Hz")
         print("Fréquence max BW: ", fmax, " Hz")
         print("Fréquence min BW: ", fmin, " Hz")
-    
+
     ax[0].sharex(ax[1]) # zoom des 2 graphes en même temps
 
     canvas = FigureCanvasTkAgg(fig, plot_frame)
@@ -331,10 +340,11 @@ def define_N():
     plot_initial_graphs()
     display_file_info()
 
-# # Autres groupe de graphes de base et flèches pour ajuster la fréquence centrale
+## Autre groupe de graphes de base et flèches pour ajuster la fréquence centrale
 def plot_other_graphs():
     global toolbar, ax, fig, canvas, iq_sig, original_iq_sig, fcenter, freq_label
-    # Figure avec 3 sous-graphes. Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
+    # Figure avec 3 sous-graphes. 
+    # Le premier est sur deux lignes, les deux autres se partagent la 3eme ligne
     original_iq_sig = iq_sig.copy() # copie du signal original pour les modifications
     fcenter = 0  # Init de l'offset FC
     clear_plot()
@@ -410,7 +420,7 @@ def plot_other_graphs():
     left_button.pack(side=tk.LEFT, padx=10)
     right_button = tk.Button(button_frame, text="→", command=lambda: change_freq(0.01))
     right_button.pack(side=tk.RIGHT, padx=10)
-    
+
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
     toolbar.update()
@@ -459,7 +469,7 @@ def plot_3d_spectrogram():
     if not filepath:
         print(lang["no_file"])
         return
-    # Génération du spectrogramme 3D 
+    # Génération du spectrogramme 3D
     freqs, times, spectrogram = mg.compute_spectrogram(iq_sig, s_rate, N, window_func=window_choice)
     spectrogram = spectrogram / np.max(spectrogram)  # normalisation
     X, Y = np.meshgrid(freqs, times)
@@ -615,7 +625,8 @@ def stft_solo():
     canvas.draw()
     del stft_matrix, canvas, freqs, times
 
-# Affichage infos supplémentaires sur le signal : Mesures de puissance. Estimations de largeur de bande, rapidité de modulation & ACF.
+# Affichage infos supplémentaires sur le signal : Mesures de puissance.
+# Estimations de largeur de bande, rapidité de modulation & ACF.
 def display_frq_info():
     print(lang["frq_info"])
     if iq_sig is None :
@@ -675,7 +686,6 @@ def display_frq_info():
     elif confidence >= 5:
         confidence_level = lang['v_high_confidence']
         estim_speed_ag = f"{round(np.mean([estim_speed_6,estim_speed_4]),2)} Bds ({confidence_level})"
-        
 
     popup = tk.Toplevel()
     popup.title(lang["frq_info"])
@@ -704,7 +714,8 @@ def display_frq_info():
         print("Autocorrélation estimée: ", acf_peak, " ms")
     del _,estim_speed,estim_speed_2, wav_mag, f, f_pmax, f_pmin, max_lvl, low_lvl, mean_lvl, freq_diff, acf_peak
 
-# Affichage des informations du fichier : nom, encodage, durée, fréquence d'échantillonnage, taille de la fenêtre FFT
+# Affichage des informations du fichier : nom, encodage, durée, fréquence d'échantillonnage,
+# taille de fenêtre FFT, recouvrement, résolution en fréquence
 def display_file_info():
     if filepath is None:
         info_label.config(text=lang["no_file"])
@@ -723,7 +734,8 @@ def display_file_info():
         print("Taille fenêtre FFT: ", N)
         print("Recouvrement: ", overlap)
 
-# Fonctions de traitement du signal (filtres, déplacement de fréquence, sous-échantillonnage, sur-échantillonnage, coupure)
+## Fonctions de traitement du signal (filtres, déplacement de fréquence,
+# sous-échantillonnage, sur-échantillonnage, coupure)
 def move_frequency():
     # déplacement de la fréquence centrale (valeur entrée par l'utilisateur)
     global iq_sig, s_rate
@@ -781,7 +793,7 @@ def apply_filter_band():
     # passage d'un filtre passe-bande
     global iq_sig, s_rate
     popup = tk.Toplevel()
-    popup.bind("<Return>", lambda event: popup.destroy()) 
+    popup.bind("<Return>", lambda event: popup.destroy())
     popup.title(lang["bandpass"])
     place_relative(popup, root, 300, 200)
     lowcut = tk.StringVar()
@@ -800,48 +812,9 @@ def apply_filter_band():
     else:
         iq_sig = sm.bandpass_filter(iq_sig, float(lowcut.get()), float(highcut.get()), s_rate, filter_order)
     if debug is True:
-        print("Filtre passe-bande appliqué. Fréquence de coupure basse: ", lowcut.get(), "Hz. Fréquence de coupure haute: ", highcut.get(), "Hz")
+        print("Filtre passe-bande appliqué. Fréquence de coupure basse: ", lowcut.get(), "Hz")
+        print("Fréquence de coupure haute: ", highcut.get(), "Hz")
     plot_initial_graphs()
-
-def mean_filter():
-    # filtre moyenneur
-    global iq_sig
-    # popup pour choisir entre appliquer ou définir le seuil
-    popup = tk.Toplevel()
-    popup.bind("<Return>", lambda event: popup.destroy()) 
-    popup.title(lang["mean"])
-    place_relative(popup, root, 300, 200)
-    mean_filter = tk.StringVar()
-    mean_filter.set(lang["not_apply"])
-    # Afficher sur la popup la valeur de la variable
-    _, psd = mg.compute_dsp(iq_sig, s_rate, N, overlap, window_choice)
-    iq_floor = 10*np.log10(np.mean(psd))
-    iq_sig_db = 10*np.log10(np.abs(iq_sig)**2 / (s_rate * N))
-    tk.Label(popup, text=lang["mean_level"] + str(iq_floor)).pack()
-    tk.Radiobutton(popup, text=lang["not_apply"], variable=mean_filter, value=lang["not_apply"]).pack()
-    tk.Radiobutton(popup, text=lang["apply_mean"], variable=mean_filter, value=lang["apply_mean"]).pack()
-    tk.Radiobutton(popup, text=lang["def_level"], variable=mean_filter, value=lang["def_level"]).pack()
-    tk.Button(popup, text="OK", command=popup.destroy).pack()
-    popup.wait_window()
-    if mean_filter.get() == lang["def_level"]:
-        iq_floor = float(tk.simpledialog.askstring(lang["level"], lang["enter_level"], parent=root))
-        iq_sig = np.where(iq_sig_db < iq_floor, 0, iq_sig)
-        if iq_floor is None:
-            if debug is True:
-                print("Seuil de moyennage non défini")
-            return
-        if debug is True:
-            print("Signal moyenné avec un seuil de ", iq_floor, " dB")
-    elif mean_filter.get() == lang["apply_mean"]:
-        iq_sig = np.where(iq_sig_db < iq_floor, 0, iq_sig)
-        if debug is True:
-            print("Signal moyenné avec un seuil de ", iq_floor, " dB")
-    else:
-        return
-    
-    print(lang["mean"])
-    plot_initial_graphs()
-    del _, psd, iq_floor, iq_sig_db
 
 def downsample_signal():
     # sous-échantillonnage
@@ -914,7 +887,8 @@ def cut_signal():
         end = int(float(end.get())*s_rate)
     iq_sig = iq_sig[start:end]
     if debug is True:
-        print("Signal coupé de ", start, "échantillons à ", end, "échantillons, soit ", end-start, "échantillons restants")
+        print("Signal coupé de ", start, "échantillons à ", end, "échantillons")
+        print("Soit ", end-start, "échantillons restants")
         print("Nouvelle durée du signal : ", len(iq_sig)/s_rate, " secondes")
     plot_initial_graphs()
     display_file_info()
@@ -925,19 +899,22 @@ def cut_signal_cursors():
     if len(cursor_points) < 2:
         tk.messagebox.showinfo(lang["error"], lang["2pt_cursors"], parent=root)
         return
-    # signal coupé entre les 2 points. On ne sait pas quel point est le début et lequel est la fin, donc on prend les valeurs y les plus petites et les plus grandes
+    # signal coupé entre les 2 points. On ne sait pas quel point est le début et lequel est la fin, 
+    # donc on prend les valeurs y les plus petites et les plus grandes
     start = int(cursor_points[0][1]*s_rate)
     end = int(cursor_points[1][1]*s_rate)
-    print(cursor_points[1][1],cursor_points[0][1])   
+    print(cursor_points[1][1],cursor_points[0][1])
     if cursor_points[1][1] < cursor_points[0][1]:
         iq_sig = iq_sig[end:start]
         if debug is True:
-            print("Signal coupé de ", end, "échantillons à ", start, "échantillons, soit ", start-end, "échantillons restants")
+            print("Signal coupé de ", end, "échantillons à ", start, "échantillons")
+            print("Soit ", start-end, "échantillons restants")
             print("Nouvelle durée du signal : ", len(iq_sig)/s_rate, " secondes")
     else:
         iq_sig = iq_sig[start:end]
         if debug is True:
-            print("Signal coupé de ", start, "échantillons à ", end, "échantillons, soit ", end-start, "échantillons restants")
+            print("Signal coupé de ", start, "échantillons à ", end, "échantillons")
+            print("Soit ", end-start, "échantillons restants")
             print("Nouvelle durée du signal : ", len(iq_sig)/s_rate, " secondes")
     plot_initial_graphs()
     display_file_info()
@@ -1014,7 +991,8 @@ def psf():
     del clock, f, peak_freq, canvas
 
 def mts():
-    # Variation de la fonction précédente, plus efficace sur certains signaux. En général performant sur les signaux de modulation de phase
+    # Variation de la fonction précédente, plus efficace sur certains signaux.
+    # En général performant sur les signaux de modulation de phase
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -1027,7 +1005,7 @@ def mts():
     clock = clock / np.max(clock)
     ax = plt.subplot()
     ax.plot(f,np.abs(clock))
-    # ligne en rouge du pic de puissance estimé sur le graphe à -peak_freq et peak_freq, sauf si < 25 Hz
+    # ligne en rouge du pic de puissance estimé sur le graphe à -peak_freq & peak_freq, sauf si < 25 Hz
     if abs(peak_freq) > 25:
         ax.axvline(x=-peak_freq, color='r', linestyle='--')
         ax.axvline(x=peak_freq, color='r', linestyle='--')
@@ -1045,7 +1023,8 @@ def mts():
     del clock, f, peak_freq, canvas
 
 def pseries():
-    # mesure de la rapidité de modulation par les ordres de puissance, efficace sur les signaux de modulation d'amplitude et de fréquence
+    # mesure de la rapidité de modulation par les ordres de puissance,
+    # efficace sur les signaux de modulation d'amplitude et de fréquence
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -1161,8 +1140,9 @@ def dsp():
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
     bw, fmin, fmax, f, Pxx = mg.estimate_bandwidth(iq_sig, s_rate, N,overlap,window_choice)
-    Pxx_shifted = np.fft.fftshift(Pxx) 
-    f_centered = np.linspace(-s_rate/2, s_rate/2, len(f)) # pas de point en dehors de la bande passante, donc évite les artefacts de bords
+    Pxx_shifted = np.fft.fftshift(Pxx)
+    # pas de point en dehors de la bande passante, donc évite les artefacts de bords
+    f_centered = np.linspace(-s_rate/2, s_rate/2, len(f))
     ax.plot(f_centered, Pxx_shifted)
     ax.set_xlim(-s_rate/2, s_rate/2)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
@@ -1208,9 +1188,10 @@ def dsp_max():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     del canvas, wav_mag, f
-    
+
 def constellation():
-    # affichage de la constellation du signal. Fortement dépendant d'un bon calibrage de la fréquence centrale
+    # Affichage de la constellation du signal.
+    # Fortement dépendant d'un bon calibrage de la fréquence centrale
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -1354,7 +1335,7 @@ def freq_difference():
     time, freq_diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
     ax.plot(time, freq_diff)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
-    ax.set_ylabel(f"{lang['freq_xy']} [Hz]") 
+    ax.set_ylabel(f"{lang['freq_xy']} [Hz]")
     ax.set_title(f"{lang['smoothing']} {diff_window}")
     ax.grid(True)
 
@@ -1455,12 +1436,12 @@ def morlet_wavelet():
     canvas.draw()
     del coefs, center_freqs, times, canvas
 
-
 # OFDM
 def alpha_from_symbol():
     global Tu, toolbar, ax, fig, cursor_points, cursor_lines, distance_text
-    # calcul de alpha frq à partir de la durée symbole OFDM (Tu), estimée par l'utilisateur avec la fonction d'autocorrélation
-    # demander à l'utilisateur de rentrer la durée estimée de Tu
+    # calcul de alpha frq à partir de la durée symbole OFDM (Tu),
+    # estimée par l'utilisateur avec la fonction d'autocorrélation.
+    # Demander à l'utilisateur de rentrer la durée estimée de Tu
     Tu = tk.simpledialog.askstring(lang["alpha"], lang["estim_tu"], parent=root)
     if Tu is None:
         if debug is True:
@@ -1522,7 +1503,7 @@ def ofdm_results():
         new_bw = float(new_bw.get())
     if debug is True:
         print("Bande passante redéfinie à ", new_bw, " Hz")
-        
+
     print(lang["ofdm_results"])
     Tu, Tg, Ts, Df, num = em.calc_ofdm(alpha_0, Tu, new_bw)
     if debug is True:
@@ -1542,13 +1523,14 @@ def ofdm_results():
     tk.Label(popup, text=f"{lang['df']} = {Df:.6f} Hz").pack()
     tk.Label(popup, text=f"{lang['num_ssp']} = {num}").pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
-    
+
     clear_plot()
-    # afficher les sous-porteuses OFDM sur la DSP du signal avec la bande passante estimée, qui sert de fenêtre dans laquelle les sous-porteuses sont affichées
+    # afficher les sous-porteuses OFDM sur la DSP du signal avec la bande passante estimée,
+    # qui sert de fenêtre dans laquelle les sous-porteuses sont affichées
     fig = plt.figure()
     fig.suptitle(lang["dsp"])
     ax = fig.add_subplot()
-    Pxx_shifted = np.fft.fftshift(Pxx) 
+    Pxx_shifted = np.fft.fftshift(Pxx)
     f_centered = np.linspace(-s_rate/2, s_rate/2, len(f)) # même échelle x que le spectrogramme
     ax.plot(f_centered, Pxx_shifted)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
@@ -1634,7 +1616,7 @@ def toggle_cursor_mode():
     global cursor_mode, click_event_id
     cursor_mode = not cursor_mode
     mode_button.config(text=lang["cursors_on"] if cursor_mode else lang["cursors_off"])
-    
+
     if cursor_mode:
         # active si option = on
         click_event_id = fig.canvas.mpl_connect('button_press_event', on_click)
@@ -1650,7 +1632,7 @@ def toggle_cursor_mode():
 
 # Gère curseurs sur clic
 def on_click(event):
-    global cursor_points, cursor_lines, distance_text  
+    global cursor_points, cursor_lines, distance_text
     if event.inaxes:  # Verif si dans le graphe
         # Ajoute un pt
         cursor_points.append((event.xdata, event.ydata))
@@ -1680,7 +1662,8 @@ def on_click(event):
             if distance_text:
                 distance_text.remove()
             if type(ax) is not tuple:
-                distance_text = ax.text(0.05, 0.95, f"ΔX: {dx:.6f}, ΔY: {dy:.6f}", # ignore "dist" : distance en diagonale
+                # ignore "dist" : distance en diagonale pas pertinente ici
+                distance_text = ax.text(0.05, 0.95, f"ΔX: {dx:.6f}, ΔY: {dy:.6f}", 
                                 transform=ax.transAxes, ha='left', va='top', fontsize=10, color='blue')
             else:
                 for a_num in ax:
@@ -1813,7 +1796,7 @@ def demod_cpm_psk():
     param_diff.pack()
     param_offset = tk.Checkbutton(popup, text=lang["param_offset"], variable=use_offset, state=tk.DISABLED)
     param_offset.pack()
-    tk.Button(popup, text="OK", command=popup.destroy).pack()    
+    tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.wait_window()
 
     if target_rate.get() == "":
@@ -1892,9 +1875,10 @@ def demod_cpm_psk():
             elif len(symbols) > 2 and order == 4:
                 bits = dm.slice_4ary(symbols,mapping)
                 if debug is True :
-                    print(f"Démodulation {mod_type} {order} réalisée avec mapping {mapping}, rapidité {clock} bauds, bits: {len(bits)}") 
+                    print(f"Démodulation {mod_type} {order} réalisée avec mapping {mapping},")
+                    print(f"rapidité {clock} bauds, bits: {len(bits)}") 
         except:
-                bits=0
+            bits=0
         # plot des bits demodulés
     try:
         clear_plot()
@@ -2005,7 +1989,7 @@ def demod_ssb():
     tk.Radiobutton(popup, text="LSB", variable=ssb_choice, value="LSB").pack()
     tk.Radiobutton(popup, text="USB", variable=ssb_choice, value="USB").pack()
     ssb_choice.set("None")
-    tk.Button(popup, text="OK", command=popup.destroy).pack()    
+    tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.wait_window()
     # demod ssb
     try:
@@ -2027,7 +2011,7 @@ def demod_mfsk():
     target_rate = None
     mapping = None
     spacing = None # espacement entre les symboles. Pour l'instant pas utilisé
-    # on demande rapidité, ordre, espacement et mapping    
+    # on demande rapidité, ordre, espacement et mapping
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
     place_relative(popup, root, 500, 250)
@@ -2083,7 +2067,7 @@ def demod_mfsk():
             symbols, clock = dm.wpcr(freq_diff, s_rate, clock, tau, precision, debug)
         elif param_method.get() == "alt":
         # EXPERIMENTAL
-            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_sig, s_rate, clock, num_tones=order, peak_thresh_db=mfsk_tresh_db, peak_prominence=mfsk_peak_prom_db, win_factor=mfsk_win_factor, hop_factor=mfsk_hop_factor, merge_bins=mfsk_bin_width_cluster_factor, switch_penalty=mfsk_viterbi_penalty)       
+            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_sig, s_rate, clock, order, mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_hop_factor, mfsk_bin_width_cluster_factor, mfsk_viterbi_penalty)     
             tone_freq /= np.max(np.abs(tone_freq))
             symbols, _ = dm.wpcr(tone_freq, s_rate, target_rate=None, tau=tau, precision=precision, debug=debug)
         if len(symbols) > 2:
@@ -2110,7 +2094,8 @@ def demod_mfsk():
             ax.set_yticks(range(order))
             ax.set_yticklabels(charset)
         elif return_format == "char":
-            charset = (string.digits + string.ascii_uppercase + string.ascii_lowercase + string.punctuation) # charset récupéré de la fonction demod.slice_mfsk
+            # charset récupéré de la fonction demod.slice_mfsk
+            charset = string.digits + string.ascii_uppercase + string.ascii_lowercase + string.punctuation 
             charmap = {ch: i for i, ch in enumerate(charset)}
             bits_plot = np.array([charmap[ch] for ch in bits if ch in charmap])
             ax.set_yticks(range(len(charset)))
@@ -2147,8 +2132,8 @@ def demod_mfsk():
         elif param_method.get() == "alt":
             text_output= f"MFSK{order} {clock} bauds, {mapping} mapping. {lang['estim_bits']} : {len(bits)}. \n"
         # lignes de bits
-        if return_format == "int" or return_format == "char":
-            # si format int, on sépare par une virgule chaque symbole
+        if return_format == "int":
+            # si format int (actuellement non utilisé), on sépare par une virgule chaque symbole
             formatted_bits = ",".join(map(str, bits))
             text_output += formatted_bits
         else:
@@ -2167,7 +2152,8 @@ def apply_median_filter():
     if not filepath:
         print(lang["no_file"])
         return
-    # Demande la taille du filtre. 4 options (Léger pour 3, Modéré pour 5, Agressif pour 9, sinon personnalisé) avec liste dans la fenêtre
+    # Demande la taille du filtre. 4 options listées :
+    # Léger pour 3, Modéré pour 5, Agressif pour 9, sinon personnalisé
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
     place_relative(popup, root, 300, 150)
@@ -2227,8 +2213,9 @@ def apply_moving_average():
     if not filepath:
         print(lang["no_file"])
         return
-    
-    # Demande la taille du filtre. 4 options (Léger pour 3, Modéré pour 5, Agressif pour 9, sinon personnalisé) avec liste dans la fenêtre
+
+    # Demande la taille du filtre. 4 options listées :
+    # Léger pour 3, Modéré pour 5, Agressif pour 9, sinon personnalisé
     popup = tk.Toplevel()
     popup.title(lang["moving_average"])
     popup.bind("<Return>", lambda event: popup.destroy())
@@ -2286,10 +2273,11 @@ def apply_fir_filter():
     # Demande la fréquence de coupure et le nombre de taps
     cutoff_freq = tk.simpledialog.askfloat(lang["fir_filter"], lang["freq_pass"], minvalue=1, maxvalue=s_rate/2, parent=root)
     num_taps = tk.simpledialog.askinteger(lang["fir_filter"], lang["fir_taps"], minvalue=1, parent=root)
+    win_type = tk.simpledialog.askstring(lang["fir_filter"], lang["window_choice"], initialvalue="hamming", parent=root)
     if cutoff_freq is None or num_taps is None:
         return
     try:
-        iq_sig = sm.fir_filter(iq_sig, s_rate, cutoff_freq, 'lowpass', num_taps)
+        iq_sig = sm.fir_filter(iq_sig, s_rate, cutoff_freq, 'lowpass', num_taps, window=win_type)
         if debug is True:
             print(f"Filtre FIR avec fréquence de coupure {cutoff_freq} Hz et {num_taps} taps appliqué")
     except Exception as e:
@@ -2425,7 +2413,8 @@ def eye_diagram():
 
 def shift_frequency():
     global iq_sig, s_rate
-    # décale la fréquence centrale de la moitié de fréquence d'échantillonnage : prend en compte les fichiers encodés "à l'envers"
+    # décale la fréquence centrale de la moitié de fréquence d'échantillonnage :
+    # prend en compte les fichiers encodés "à l'envers"
     if not filepath:
         return
     iq_sig = iq_sig * ((-1) ** np.arange(len(iq_sig)))
@@ -2535,7 +2524,7 @@ def audio_output():
     update_progress_bar()
 
 def advanced_settings():
-    # Distance min pour fc et nfreq pour CWT Morlet, 
+    # Distance min pour fc et nfreq pour CWT Morlet,
     # (db_thresh,win_factor,hop_factor,peak_prominence,cluster_bin_width_factor,viteri_penalty) pour détection de tons MFSK,
     # eye diagram (num_traces, channel, symbols_per_trace), costas loop (zeta damping_factor,loop_bw_factor),
     global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
@@ -2739,7 +2728,6 @@ def load_lang_changes():
     # Menu Filtre
     filter_menu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
     filter_menu.add_command(label=lang["filter_band"], command=apply_filter_band)
-    filter_menu.add_command(label=lang["mean"], command=mean_filter)
     filter_menu.add_command(label=lang["median_filter"], command=apply_median_filter)
     filter_menu.add_command(label=lang["moving_average"], command=apply_moving_average)
     filter_menu.add_command(label=lang["wiener_filter"], command=apply_wiener_filter)
@@ -2838,7 +2826,7 @@ print(r"  \___ \| |/ _` | / /\ \ | '_ \| |/ _ \ ")
 print(r"  ____) | | (_| |/ ____ \| | | | | (_) |")
 print(r" |_____/|_|\__, /_/    \_\_| |_|_|\___/ ")
 print(r"            __/ |                       ")
-print(r"           |___/                        ") 
+print(r"           |___/                        ")
 
 print("Application démarrée")
 print(lang["load_msg"])

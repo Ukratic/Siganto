@@ -32,7 +32,7 @@ def blackman_harris_7term_window(N):
     if N < 1:
         return np.array([])
 
-    # Coefficients pour la fenêtre Blackman-Harris 7-term (source : National Instruments, H.H. Albrecht)
+    # Coefficients pour Blackman-Harris 7-term (source : National Instruments, H.H. Albrecht)
     a0 = 0.27105140069342
     a1 = 0.43329793923448
     a2 = 0.21812299954311
@@ -105,7 +105,7 @@ def get_window(window_type, N):
     """Retourne la fenêtre appropriée selon le type"""
     if window_type == 'flattop': # précision en amplitude
         return flattop_window(N)
-    elif window_type == 'blackmanharris7term': # réjection de lobes secondaires et haute dynamique, bon compromis
+    elif window_type == 'blackmanharris7term': # réjection de lobes secondaires & haute dynamique
         return blackman_harris_7term_window(N)
     elif window_type == 'hann': # cas général
         return np.hanning(N)
@@ -122,8 +122,8 @@ def get_window(window_type, N):
     elif window_type == 'gaussian': # fenêtre gaussienne, réduction de bruit
         return gaussian_window(N)
     else:
-        raise ValueError(f"Type de fenêtre inconnu : {window_type}")    
-    
+        raise ValueError(f"Type de fenêtre inconnu : {window_type}")
+
 def morlet_wavelet(t, s, w=6.0):
     """ Génère une ondelette Morlet dans le domaine temporel.
     t : tableau de temps centré à 0

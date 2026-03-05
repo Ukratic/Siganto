@@ -17,7 +17,7 @@ def power_spectrum_envelope(iq_sig, samp_rate):
     spectrum_fft = np.fft.fftshift(spectrum_fft)
     # fréquences de -samp_rate/2 à samp_rate/2 pour l'affichage du spectre
     f = np.linspace(samp_rate/-2, samp_rate/2, len(iq_sig))
-    # ignorer le pic autour de 0hz pour la détection du pic de fréquence mais le conserver pour l'analyse
+    # ignorer autour de 0hz pour la détection du pic de fréquence mais conserver pour l'analyse
     discard_dc = np.abs(spectrum_fft)
     zero_index = np.abs(f).argmin()
     discard_dc[zero_index-10:zero_index+10] = 0 # ignorer 10 indices autour de 0hz
@@ -112,9 +112,11 @@ def cyclic_spectrum_fft(iq_sig, samp_rate, alpha_list):
 def cyclic_spectrum_sliding_fft(iq_sig, samp_rate, window, frame_len=512, step=256):
     """Cyclospectre avec FFT glissante.
     Estimation de la rapidité de modulation basée sur la moyenne du cyclospectre.
-    Demande plus de calculs (nb d'échantillons conséquent) mais plus robuste que d'une seule FFT sur tout le signal."""
+    Demande plus de calculs (nb d'échantillons conséquent) 
+    mais plus robuste que d'une seule FFT sur tout le signal."""
     window = df.get_window(window, frame_len)
-    alpha_list = np.linspace(-samp_rate/2, samp_rate/2, int(np.log(len(iq_sig))*1000))  # fréquences cycliques
+    # fréquences cycliques
+    alpha_list = np.linspace(-samp_rate/2, samp_rate/2, int(np.log(len(iq_sig))*1000)) 
     # Initialisation de l'accumulateur de corrélation cyclique
     cyclic_corr_accum = np.zeros(len(alpha_list))
     frame_count = 0
@@ -197,7 +199,8 @@ def phase_time_angle(iq_sig, samp_rate, window_size=5, window_type='rectangular'
 # Mesures de phase cumulée
 def phase_cumulative_distribution(iq_sig, num_bins=250):
     """Estimation de la distribution de la phase positive
-    Peut aider à identifier certains types de modulation mais requiert une bonne synchronisation en fréquence"""
+    Peut aider à identifier certains types de modulation 
+    mais requiert une bonne synchronisation en fréquence"""
     phase = np.angle(iq_sig)  # wrapped [-π, π]
     phase_pos = phase[phase > 0]  # garder seulement les phases positives
     hist, bin_edges = np.histogram(phase_pos, bins=num_bins, range=(0, np.pi), density=True)
@@ -222,7 +225,8 @@ def frequency_transitions(iq_sig, samp_rate, window_size=5, window_type='rectang
     return time, smoothed_freq
 
 # Mesures de fréquence cumulée
-def frequency_cumulative_distribution(iq_sig, samp_rate, num_bins=250, window_size=5, window_type='rectangular'):
+def frequency_cumulative_distribution(iq_sig, samp_rate, num_bins=250, 
+                                      window_size=5, window_type='rectangular'):
     """Distribution de fréquence instantanée"""
     # optionnel : lisser la fréquence instantanée pour une distribution plus propre
     inst_freq = frequency_transitions(iq_sig, samp_rate, window_size, window_type)[1]
@@ -278,7 +282,8 @@ def autocorrelation_peak_from_acf(yx, lags, min_distance=1):
 # Autocorrelation complète (lente)
 def full_autocorrelation(iq_sig):
     """Fonction d'autocorrélation sur le signal complexe.
-    Fonction plus lente que l'autocorrélation par FFT mais retourne la fonction complète, plus précise"""
+    Fonction plus lente que l'autocorrélation par FFT 
+    mais retourne la fonction complète, plus précise"""
     yx, lags = np.correlate(iq_sig, iq_sig, mode='full'), np.arange(-len(iq_sig)+1, len(iq_sig))
     # les valeurs négatives de lags sont ignorées = doublons
     yx = yx[len(iq_sig)-1:]
@@ -287,9 +292,10 @@ def full_autocorrelation(iq_sig):
     return np.abs(yx), lags
 
 #SCF
-def scf_tsm(samples, fs=48000, Nw=512, window=None, overlap=256, max_alpha=None, alpha_step_hz=5):
-    """Compute the Spectral Correlation Function (SCF) using a sliding-window cross-cyclic method (TSM)."""
-    """Fonction de corrélation spectrale (SCF) en utilisant une méthode de fenêtre glissante trans-cyclique (TSM)"""
+def scf_tsm(samples, fs=48000, Nw=512, window=None, 
+            overlap=256, max_alpha=None, alpha_step_hz=5):
+    """Fonction de corrélation spectrale (SCF) 
+    en utilisant une méthode de fenêtre glissante trans-cyclique (TSM)"""
     if max_alpha is None:
         max_alpha = fs / 2
 
@@ -326,7 +332,8 @@ def scf_tsm(samples, fs=48000, Nw=512, window=None, overlap=256, max_alpha=None,
 
 ##
 # OFDM
-# Fonctions pour estimer les paramètres de modulation OFDM, basés sur le code Matlab de FX Socheleau - IMT Atlantique, 2020
+# Fonctions pour estimer les paramètres de modulation OFDM, 
+# basés sur le code Matlab de FX Socheleau - IMT Atlantique, 2020
 # Cours "Analyse aveugle de signaux de communication" - Telecom Paris 2024
 ##
 
@@ -366,7 +373,8 @@ def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
     Tg = round(cy_px,5) # en ms
     Ts = round(estimated_ofdm_symbol_duration + cy_px,5) # en ms
     Df = round(Df,3)
-    # Estime le nombre de sous-porteuses dans le symbole OFDM à partir de : 1) la bande passante estimée et 2) Df = l'espacement des sous-porteuses
+    # Estime le nombre de sous-porteuses dans le symbole OFDM à partir de : 
+    # 1) la bande passante estimée et 2) Df = l'espacement des sous-porteuses
     # Nb max de sous-porteuses
     for N in range(1, 25000):
         if N*Df >= bandwidth:

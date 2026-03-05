@@ -1,7 +1,7 @@
 """Lib de langue pour l'interface graphique de SigAnTo"""
 
 def get_fra_lib():
-    # load FR
+    """Charge les noms, titres et messages en français"""
     fra_lib = {
         "siganto": "SigAnTo : Outil d'analyse de signaux",
         "lang": "Français",
@@ -43,12 +43,7 @@ def get_fra_lib():
         "freq_low": "Fréquence de coupure basse en Hz:",
         "freq_high": "Fréquence de coupure haute en Hz:",
         "freq_valid": "Entrez des fréquences de coupure valides",
-        "mean": "Moyenner le signal",
         "mean_level": "Niveau moyen en dB: ",
-        "level": "Niveau de moyennage: ",
-        "apply_mean": "Appliquer le moyennage par défaut",
-        "def_level": "Définir le seuil",
-        "enter_level": "Entrer le niveau en dB :", 
         "downsample": "Sous-échantillonner",
         "down_value": "Entrez le taux de sous-échantillonnage (entier) : ",
         "upsample": "Sur-échantillonner",
@@ -114,7 +109,7 @@ def get_fra_lib():
         "estim_failed": "Echec de l'estimation de rapidité de modulation. Tentez une autre méthode.",
         "time_estimate": "Mesures Temporelles",
         "freq_estimate": "Mesures Fréquentielles",
-        "time_amp": "Domaine temporel / Amplitude",
+        "time_amp": "Amplitude instantanée",
         "persist_spectrum": "Spectre de persistance",
         "spectrogram": "Spectrogramme",
         "smoothing": "Lissage",
@@ -254,12 +249,12 @@ def get_fra_lib():
         "mfsk_hop_factor": "Facteur de saut (fraction de la taille de fenêtre) [float]",
         "ssb_choice": "Sélectionner LSB ou USB pour la démodulation SSB",
         "demod_ssb": "Démodulation SSB",
-        
+
     }
     return fra_lib
 
 def get_eng_lib():
-    # load EN
+    """Load names, titles and messages in English"""
     eng_lib = {
         "siganto": "SigAnTo : Signal Analysis Tool",
         "lang": "English",
@@ -302,12 +297,7 @@ def get_eng_lib():
         "freq_low": "Low cut-off frequency in Hz:",
         "freq_high": "High cut-off frequency in Hz:",
         "freq_valid": "Enter valid cut-off frequencies",
-        "mean": "Average signal",
         "mean_level": "Mean level in dB: ",
-        "level": "Averaging level: ",
-        "apply_mean": "Apply default mean",
-        "def_level": "Set threshold",
-        "enter_level": "Enter level in dB :",
         "downsample": "Downsample",
         "down_value": "Enter the downsampling ratio (int): ",
         "upsample": "Upsample",
@@ -372,7 +362,7 @@ def get_eng_lib():
         "estim_failed": "Symbol rate estimation failed. Try another method.",
         "time_estimate": "Time Metrics",
         "freq_estimate": "Frequency Metrics",
-        "time_amp": "Time Domain / Amplitude",
+        "time_amp": "Instantaneous Amplitude",
         "persist_spectrum": "Persistence Spectrum",
         "spectrogram": "Spectrogram",
         "smoothing": "Smoothing",

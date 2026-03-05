@@ -5,7 +5,8 @@ import dsp_funcs as df
 
 # Spectrogramme
 def compute_spectrogram(iq_sig, samp_rate, N, window_func='hann'):
-    """Spectrogramme basé sur la FFT Cooley-Tukey (numpy.fft), cf PyDSP (Dr M. Lichtman), sans overlap"""
+    """Spectrogramme basé sur la FFT Cooley-Tukey (numpy.fft), 
+    cf PyDSP (Dr M. Lichtman), sans overlap"""
     # Calcule nb de lignes pour la matrice
     num_rows = len(iq_sig) // N
     spectrogram = np.zeros((num_rows, N)) # Initialisation matrice
@@ -14,7 +15,8 @@ def compute_spectrogram(iq_sig, samp_rate, N, window_func='hann'):
     # Calc spectrogramme
     for i in range(num_rows):
         chunk = iq_sig[i*N:(i+1)*N] * window # Segmentation + fenêtrage
-        spectrogram[i, :] = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(chunk)))**2) # FFT + Magnitude + dB + Shift
+        # FFT + Magnitude + dB + Shift
+        spectrogram[i, :] = 10 * np.log10(np.abs(np.fft.fftshift(np.fft.fft(chunk)))**2) 
     # Bins fréquence et temps
     freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1/samp_rate))
     times = np.arange(num_rows) * (N / samp_rate)
@@ -38,7 +40,7 @@ def compute_stft(iq_sig, samp_rate, window_size, overlap, window_func='hann'):
         # Segmentation et fenêtrage
         segment = iq_sig[start:end]
         if len(segment) < window_size: # Zero padding si nécessaire
-            segment = np.pad(segment, (0, window_size - len(segment))) 
+            segment = np.pad(segment, (0, window_size - len(segment)))
         segment = segment * window
         # Compute FFT
         fft_segment = np.fft.fft(segment)

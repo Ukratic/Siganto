@@ -1,13 +1,14 @@
 """Fonctions de démodulation et/ou d'estimation du débit symbole. 
-WPCR pour demod NRZ basée sur les fonctions de Michael Ossmann, "clock recovery experiments" : https://github.com/mossmann/clock-recovery"""
-import numpy as np
-import scipy.signal as signal
+WPCR pour demod NRZ basée sur les fonctions de Michael Ossmann, 
+"clock recovery experiments" : https://github.com/mossmann/clock-recovery"""
 import string
+import numpy as np
+from scipy.signal import argrelextrema, find_peaks
 
 
 def find_clock_frequency(fdiff, sample_rate, target_rate=None, precision=0.9):
     """Détermine la fréquence d'horloge"""
-    maxima = signal.argrelextrema(fdiff, np.greater_equal)[0] # indices des maxima locaux
+    maxima = argrelextrema(fdiff, np.greater_equal)[0] # indices des maxima locaux
     while maxima[0] < 2:
         maxima = maxima[1:]
     if not maxima.any():
@@ -34,14 +35,14 @@ def find_clock_frequency(fdiff, sample_rate, target_rate=None, precision=0.9):
     indices_above_threshold = np.argwhere(fdiff[maxima] > threshold)
 
     # renvoie le premier pic au-dessus du seuil
-    return int(maxima[indices_above_threshold[0]]) if indices_above_threshold.size > 0 else 0
+    return 0 if indices_above_threshold.size < 1 else maxima[indices_above_threshold[0]].item()
 
 def midpoint(a):
     """Fonction pour déterminer le milieu de segment"""
     mean_a = np.mean(a)
     mean_a_greater = np.ma.masked_greater(a, mean_a)
     high = np.ma.median(mean_a_greater) # médiane des valeurs > moyenne
-    mean_a_less_or_equal = np.ma.masked_array(a, ~mean_a_greater.mask) 
+    mean_a_less_or_equal = np.ma.masked_array(a, ~mean_a_greater.mask)
     low = np.ma.median(mean_a_less_or_equal) # médiane des valeurs ≤ moyenne
     return (high + low) / 2 # milieu entre les deux médianes
 
@@ -112,7 +113,7 @@ def slice_4ary(symbols,mapping):
     # chaque symbole = 2 bits
     if len(symbols) == 0:
         return np.array([], dtype=np.uint8)
-    # 4 niveaux de décision sur les symboles. la fonction attend que les symboles soient déjà normalisés
+    # 4 niveaux de décision sur symboles. la fonction attend que les symboles soient déjà normalisés
     q25, q50, q75 = -0.50, 0.00, 0.50
     # 2 mappings, sinon custom
     mappings = {
@@ -194,8 +195,8 @@ def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
     # Option pour renvoyer les indices en format entier
     if return_format == "int":
         return indices.astype(int)
-    
-    # Option pour renvoyer les indices en caractères : jusqu'à 94 symboles différents sur un seul caractère
+
+    # Option pour renvoyer les indices en caractères : max 94 symboles différents pour 1 caractère
     if return_format == "char":
         charset = (
             string.digits +                # 0-9
@@ -206,8 +207,8 @@ def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
         # si on dépasse le charset : retombe sur format hexadécimal
         if order > len(charset):
             return np.array([format(i, "X") for i in indices], dtype=object)
-        else:
-            return np.array([charset[i] for i in indices], dtype=object)
+
+        return np.array([charset[i] for i in indices], dtype=object)
 
     # Mapping des indices en bits
     num_bits = int(np.ceil(np.log2(order)))
@@ -228,14 +229,14 @@ def slice_mfsk(symbols, order, mapping="natural", return_format="binary"):
     return bits
 
 def parabolic_interpol(mag, k):
-    # Parabolic peak interpolation around bin k (on linear power or magnitude)
-    # Returns fractional bin offset delta in [-0.5, 0.5] roughly
+    """Parabolic peak interpolation around bin k (on linear power or magnitude).
+    Returns fractional bin offset delta in [-0.5, 0.5] roughly"""
     if k <= 0 or k >= len(mag)-1:
         return 0.0
     a = mag[k-1]
     b = mag[k]
     c = mag[k+1]
-    denom = (a - 2*b + c) # 2nd derivative approx
+    denom = a - 2*b + c # 2nd derivative approx
     if abs(denom) < 1e-12:
         return 0.0
     delta = 0.5 * (a - c) / denom # vertex of the parabola
@@ -244,6 +245,7 @@ def parabolic_interpol(mag, k):
     return delta
 
 def cluster_freqs(freqs, weights=None, merge_hz=0.0):
+    """Cluster des fréquences proches pour éviter les doublons de détection."""
     if len(freqs) == 0:
         return np.array([])
     order = np.argsort(freqs)
@@ -264,7 +266,8 @@ def cluster_freqs(freqs, weights=None, merge_hz=0.0):
     clusters.sort(key=lambda x: -x[1])  # by weight
     return np.array([c[0] for c in clusters]) # return only frequencies
 
-def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de MFSK différents (espacement, nombre de tons, SNR, dérive freq, etc)
+# Méthode à évaluer sur plusieurs types de MFSK (diffs d'espacement, nb de tons, SNR, dérive frq...)
+def detect_and_track_mfsk_auto(
     iq, fs, baud,
     num_tones=None,              # keep top-N tones after clustering (None=all)
     peak_thresh_db=8,            # per-frame relative threshold
@@ -273,7 +276,7 @@ def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de
     hop_factor=0.25,             # hop : hop_factor * window
     merge_bins=1.2,              # cluster width in bins for tone dedup
     switch_penalty=0.05          # Viterbi penalty (linear power units)
-): 
+):
     """
     Auto-detect baseband MFSK tones (±freq) and track them over time.
     - Uses sub-bin (parabolic) peak interpolation for tone detection
@@ -306,12 +309,13 @@ def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de
 
         # Select all peaks within threshold of the frame's max
         height = mx - float(peak_thresh_db)
-        # Optional prominence in dB -> convert to linear magnitude-ish gate by comparing to local baseline
+        # Optional prominence in dB :
+        # convert to linear magnitude-ish gate by comparing to local baseline
         if peak_prominence is not None:
             # Use scipy's prominence on dB directly (approx OK)
-            peaks, _ = signal.find_peaks(db, height=height, prominence=peak_prominence)
+            peaks, _ = find_peaks(db, height=height, prominence=peak_prominence)
         else:
-            peaks, _ = signal.find_peaks(db, height=height)
+            peaks, _ = find_peaks(db, height=height)
 
         for k in peaks:
             # Sub-bin interpolation
@@ -401,7 +405,7 @@ def detect_and_track_mfsk_auto( # Méthode à évaluer sur plusieurs exemples de
     return tone_freqs, times, tone_idx, tone_trace, tone_pows, measured_rate
 
 def eye_diagram_with_metrics(samples, fs, baud_rate, channel="I", num_traces=500, symbols_per_trace=2):
-    # A travailler : correction de timing de phase
+    # A prévoir pour rendre plus utile : intégrer correction de timing de phase
     """Trace un diagramme de l'oeil avec métriques associées"""
     # Sélection du canal
     if np.iscomplexobj(samples):
@@ -494,19 +498,19 @@ def costas_loop(x, fs, loop_bandwidth, order=2, damping=0.707):
     x = x/np.max(np.abs(x))
     Bn = loop_bandwidth / fs
     zeta = damping  # damping
-    
+
     # Coefficients
     denom = 1 + 2*zeta*Bn + Bn**2
     Kp = (4*zeta*Bn) / denom
     Ki = (4*Bn**2) / denom
-    
+
     phase = 0.0
     freq_acc = 0.0
     out = []
-    
+
     for sample in x:
         mixed = sample * np.exp(-1j*phase)
-        
+
         # Detection d'erreur (BPSK/QPSK)
         if order == 2:  # BPSK
             error = np.real(mixed) * np.imag(mixed)
@@ -514,25 +518,28 @@ def costas_loop(x, fs, loop_bandwidth, order=2, damping=0.707):
             error = np.sign(mixed.real) * mixed.imag - np.sign(mixed.imag) * mixed.real
         else:
             raise ValueError("Only BPSK (2) and QPSK (4) supported.")
-        
+
         # filtre de la boucle (contrôleur P&I)
         freq_acc += Ki * error
         phase += freq_acc + Kp * error
-        
+
         # Wrap phase
-        if phase > np.pi: 
+        if phase > np.pi:
             phase -= 2*np.pi
-        elif phase < -np.pi: 
+        elif phase < -np.pi:
             phase += 2*np.pi
-        
+
         out.append(mixed)
-    
+
     return np.array(out)
 
-def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False, offset=False, pi4=False, costas_damping=0.707, costas_bw_factor=0.01):
+def psk_demodulate(sig, fs, symbol_rate, order=2,
+                   gray=False, differential=False, offset=False, pi4=False,
+                   costas_damping=0.707, costas_bw_factor=0.01):
     """Démodulation BPSK/QPSK"""
     # Recup par boucle de Costas
-    bw_loop = symbol_rate * costas_bw_factor # BW boucle sur critère de rapidité. Compromis actuel suppose RSB faible mais correct.
+    bw_loop = symbol_rate * costas_bw_factor # BW boucle sur critère de rapidité. 
+    # Compromis actuel suppose RSB faible mais reste nettement démarqué du bruit.
     recovered = costas_loop(sig, fs, loop_bandwidth=bw_loop, order=order, damping=costas_damping)
 
     # Timing symbole, sps fractionnel
@@ -546,18 +553,18 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
             symbols.append(recovered[idx])
     symbols = np.array(symbols)
 
-    if order == 2 and differential == False:  # BPSK
+    if order == 2 and differential is False: # BPSK
         bits = (np.real(symbols) > 0).astype(int)
-        
+
         return np.array(bits, dtype=np.uint8)
 
-    elif order == 2 and differential == True: # DBPSK
+    elif order == 2 and differential is True: # DBPSK
         phases = np.angle(symbols * np.conj(np.roll(symbols, 1)))
-        bits = (phases > 0).astype(np.uint8)[1:] 
+        bits = (phases > 0).astype(np.uint8)[1:]
 
         return np.array(bits, dtype=np.uint8)
 
-    elif order == 4 and differential == False and offset == False:  # QPSK
+    elif order == 4 and differential is False and offset is False: # QPSK
         bits = []
         for s in symbols:
             if s.real >= 0 and s.imag >= 0:
@@ -572,12 +579,12 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
 
         return np.array(bits, dtype=np.uint8)
 
-    elif order == 4 and offset == True and differential == False: # OQPSK
+    elif order == 4 and offset is True and differential is False: # OQPSK
         I = (np.real(symbols) > 0).astype(np.uint8)
         Q = (np.imag(symbols) > 0).astype(np.uint8)
 
         if not gray:
-            Q = Q ^ I 
+            Q = Q ^ I
         # Décalage Q par demi symbole
         Q = np.roll(Q, -1)
         bits = np.empty(2*len(I), dtype=np.uint8)
@@ -586,7 +593,7 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
 
         return np.array(bits, dtype=np.uint8)
 
-    elif order == 4 and offset == False and differential == True: # DQPSK
+    elif order == 4 and offset is False and differential is True: # DQPSK
         diffs = symbols * np.conj(np.roll(symbols, 1))
         phases = np.angle(diffs)
         bits = []
@@ -640,7 +647,7 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
                 bits.extend(mapping[np.pi])
 
         return np.array(bits, dtype=np.uint8)
-    
+
     elif order == 4 and pi4:  # π/4-QPSK
         # On gère le cas général qui est en fait π/4-DQPSK
         diffs = symbols * np.conj(np.roll(symbols, 1))
@@ -673,7 +680,8 @@ def psk_demodulate(sig, fs, symbol_rate, order=2, gray=False, differential=False
     else:
         raise ValueError("Unsupported combination of order/differential/offset/pi4.")
 
-# Inutilisée pour l'instant ; peut servir pour affiner le timing CPM. A tester + trouver autre méthode pour PSK et ordre supérieur à 2.
+# Inutilisée pour l'instant ; peut servir pour affiner le timing CPM. 
+# A tester + trouver autre méthode pour PSK et ordre supérieur à 2.
 def estimate_timing_phase(signal, sps, zero=0):
     """Estime le décalage de phase dans un signal NRZ via zero-crossings.
     Méthode basée sur un algorithme proposé par Eduardo Fuentetaja"""
