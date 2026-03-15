@@ -93,13 +93,19 @@ def estimate_baud_rate(a, sample_rate, target_rate=None, precision=0.9, debug=Fa
     f = np.fft.fft(d, len(a))
     p = find_clock_frequency(abs(f), sample_rate, target_rate, precision)
     if p == 0:
-        return 0
+        return 0, np.array([]), np.array([])
     # conversions index des bins en Hz
     baud_rate = p * sample_rate / len(f)
+    # fréquences et mag pour le graphe
+    freqs = np.fft.fftfreq(len(f), 1/sample_rate)
+    mag = np.abs(f)
+    mag[0] = 0  # ignore DC
+
     if debug:
         print("peak frequency index: %d / %d" % (p, len(f)))
         print("estimated baud rate: %f" % baud_rate)
-    return baud_rate
+
+    return baud_rate, freqs, mag
 
 # Fonctions de slicing : binaire, 4-FSK, MFSK. Soft -> bits.
 def slice_binary(symbols):

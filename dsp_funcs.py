@@ -101,6 +101,17 @@ def center_signal(iq_sig, samp_rate, prominence=0.1):
 
     return iq_shifted, center_freq
 
+def correct_constellation_rotation(iq_sig, M):
+    """Corrige la rotation de constellation pour une modulation M-aire (ex: M=4 pour QPSK)"""
+    sig_M = iq_sig ** M
+
+    phase_vector = np.mean(np.exp(1j * np.angle(sig_M)))
+    theta = np.angle(phase_vector) / M
+
+    corrected = iq_sig * np.exp(-1j * theta)
+
+    return corrected, theta
+
 def get_window(window_type, N):
     """Retourne la fenêtre appropriée selon le type"""
     if window_type == 'flattop': # précision en amplitude

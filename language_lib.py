@@ -60,7 +60,7 @@ def get_fra_lib():
         "psf": "Spectre d'enveloppe de puissance",
         "mts": "Spectre des transitions d'horloge",
         "mag": "Puissance",
-        "estim_peak": "Pic de puissance estimé à :",
+        "estim_peak": "Pic estimé à :",
         "pseries": "Spectre des puissances d'ordre 2 & 4",
         "phase_estimate": "Mesures Phase",
         "diff_phase": "Phase instantanée",
@@ -234,8 +234,8 @@ def get_fra_lib():
         "peak_prominence": "Proéminence des pics pour le recentrage automatique [float]",
         "acf_min_distance": "Distance minimale en échantillons (de 0) pour le pic d'autocorrélation automatique [int]",
         "scf_alpha_step": "Pas de fréquence alpha (Hz) pour la fonction de corrélation spectrale [int]",
-        "tau_modifier": "Modificateur de tau pour démodulation WPCR [float]",
-        "precision": "Précision pour la recherche ciblée de rapidité de modulation [float]",
+        "tau_modifier": "Modificateur de tau pour démodulation WPCR (tau*pi) [float]",
+        "precision": "Précision pour la recherche ciblée de rapidité de modulation [float][0.0-1.0]",
         "costas_damping": "Amortissement de la boucle de Costas [float]",
         "costas_bw_factor": "Facteur de bande passante de la boucle de Costas [float]",
         "morlet_params": "Paramètres de la CWT Morlet. Paramètre (Hz) de fréquence centrale [float] et nombre de fréquences [int]",
@@ -249,6 +249,11 @@ def get_fra_lib():
         "mfsk_hop_factor": "Facteur de saut (fraction de la taille de fenêtre) [float]",
         "ssb_choice": "Sélectionner LSB ou USB pour la démodulation SSB",
         "demod_ssb": "Démodulation SSB",
+        "rotation_correction": "Correction de rotation de constellation",
+        "rotation_order": "Entrez le nombre d'états (4 pour QPSK, 2 pour BPSK...) :",
+        "rotation_corrected": "Constellation corrigée de la rotation",
+        "clock_graph": "Détection de la fréquence d'horloge",
+        "adds_options": "Options supplémentaires",
 
     }
     return fra_lib
@@ -314,7 +319,7 @@ def get_eng_lib():
         "psf": "Power Envelope Spectrum",
         "mts": "Clock Transition Spectrum",
         "mag": "Magnitude",
-        "estim_peak": "Estimated power peak at :",
+        "estim_peak": "Estimated peak at :",
         "pseries": "Power Order 2 & 4 Spectrum",
         "phase_estimate": "Phase Metrics",
         "diff_phase": "Instantaneous Phase",
@@ -487,8 +492,8 @@ def get_eng_lib():
         "peak_prominence": "Peak prominence for automatic recentering [float]",
         "acf_min_distance": "Minimum sample distance (from 0) for automatic autocorrelation peak [int]",
         "scf_alpha_step": "Alpha frequency step (Hz) for the Spectral Correlation Function [int]",
-        "tau_modifier": "Tau modifier for WPCR demodulation [float]",
-        "precision": "Precision for targeted symbol rate search [float]",
+        "tau_modifier": "Tau modifier for WPCR demodulation (tau*pi) [float]",
+        "precision": "Precision for targeted symbol rate search [float][0.0-1.0]",
         "costas_damping": "Costas loop damping [float]",
         "costas_bw_factor": "Costas loop bandwidth factor [float]",
         "morlet_params": "Morlet CWT parameters. Central frequency parameter (Hz) [float] and number of frequencies [int]",
@@ -502,6 +507,11 @@ def get_eng_lib():
         "mfsk_hop_factor": "Hop factor for MFSK demodulation (fraction of window size) [float]",
         "ssb_choice": "Select LSB or USB for SSB demodulation",
         "demod_ssb": "SSB Demodulation",
+        "rotation_correction": "Constellation rotation correction",
+        "rotation_order": "Enter the number of states (4 for QPSK, 2 for BPSK...) :",
+        "rotation_corrected": "Constellation corrected for rotation",
+        "clock_graph": "Clock Frequency Detection",
+        "adds_options": "Additional options",
 
     }
     return eng_lib

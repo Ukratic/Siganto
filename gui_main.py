@@ -12,6 +12,8 @@ And some estimations, mostly through graphs : Modulation, symbol rate, bandwidth
 
 Many thanks to Dr Marc Lichtman - University of Maryland. Author of PySDR.
 """
+import sys
+import os
 import tkinter as tk
 from threading import Thread, Event
 
@@ -56,6 +58,18 @@ def loading_libs():
     # loading_end.wait() à la fin du script
     loading_end.set()
 
+# fonction pour trouver le chemin relatif des ressources même après compilation avec PyInstaller
+# utilisé uniquement pour l'icône actuellement, mais peut être réutilisé si besoin
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+icon_path = resource_path("radio-waves.ico")
+
 # Fenêtre de chargement
 t = Thread(target=loading_libs, daemon=True)
 t.start()
@@ -67,6 +81,7 @@ root.withdraw()
 loading_screen = tk.Toplevel(root)
 loading_screen.title("SigAnTo v1.10")
 loading_screen.geometry("250x100")
+loading_screen.iconbitmap(icon_path)
 loading_label = tk.Label(loading_screen, text="Loading...")
 loading_label.pack()
 
@@ -78,6 +93,7 @@ print("Chargement de l'application...")
 # Fenêtre principale
 root.title(lang["siganto"])
 root.geometry("1024x768")
+root.iconbitmap(icon_path)
 menu_bar = tk.Menu(root)
 print("Chargement des fonctions...")
 # Init des variables
@@ -208,7 +224,7 @@ def load_wav():
         tk.messagebox.showerror(lang["error"], lang["wav_conversion"], parent=root)
     if len(iq_sig) > 1e6: # si plus d'un million d'échantillons
         N = 4096
-    elif 1e5 < len(iq_sig) < 1e6 :
+    elif 1e5 < len(iq_sig) < 1e6 : # si entre 100k et 1 million d'échantillons
         N = 1024
     elif len(iq_sig) < s_rate: # si moins d'une seconde
         # base de résolution = 25 Hz par défaut, proportionnellement à la durée si > 1 seconde
@@ -216,6 +232,8 @@ def load_wav():
         N = (int(N/2))*2 # N pair de préférence
         if N < 4: # taille minimum de 4 échantillons
             N = 4
+    elif len(iq_sig) < 5e3:
+        N = 128 # taille de fenêtre FFT pour les signaux > 1 sec mais < 5k échantillons
     else:
         N = 512 # taille de fenêtre FFT par défaut
     overlap = N//overlap_value
@@ -641,13 +659,17 @@ def display_frq_info():
     max_lvl = 10*np.log10(np.max(psd))
     low_lvl = 10*np.log10(np.min(psd))
     mean_lvl = 10*np.log10(np.mean(psd))
+    bw = round(mg.estimate_bandwidth(iq_sig, s_rate, N, overlap, window_choice)[0],2)
     estim_speed_2 = round(np.abs(em.mean_threshold_spectrum(iq_sig, s_rate)[2]),2)
     estim_speed = round(np.abs(em.power_spectrum_envelope(iq_sig, s_rate)[2]),2)
     _,_,_, peak_squared_freq, peak_quartic_freq = em.power_series(iq_sig, s_rate)
     estim_speed_3 = [round(abs(peak_squared_freq),2),round(abs(peak_quartic_freq),2)]
     _, freq_diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
     freq_diff /= np.max(np.abs(freq_diff))
-    estim_speed_4 = round(float(dm.estimate_baud_rate(freq_diff, s_rate)),2)
+    clock,_,_ = dm.estimate_baud_rate(freq_diff, s_rate)
+    estim_speed_4 = round(float(clock),2)
+    if estim_speed_4 == 0 or np.isnan(estim_speed_4) or np.isinf(estim_speed_4):
+        estim_speed_4 = 0.01 # pour éviter les erreurs de division par zéro ou d'affichage
     estim_speed_5 = round(np.abs(em.envelope_spectrum(iq_sig, s_rate)[2]),2)
     acf_peak = round(np.abs(em.autocorrelation_peak(iq_sig, s_rate, min_distance=acf_min_distance)[1]),2)
 
@@ -677,15 +699,18 @@ def display_frq_info():
     elif confidence < 2:
         confidence_level = lang['low_confidence']
         estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
-    elif confidence >= 2 and confidence < 3:
+    elif confidence >= 2 and confidence < 3 and estim_speed_4 > bw/10 and estim_speed_4 < bw:
         confidence_level = lang['medium_confidence']
         estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
-    elif confidence >= 3 and confidence <= 4:
+    elif confidence >= 3 and confidence <= 4 and estim_speed_4 > bw/10 and estim_speed_4 < bw:
         confidence_level = lang['high_confidence']
         estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
-    elif confidence >= 5:
+    elif confidence >= 5 and estim_speed_6 > bw/10 and estim_speed_6 < bw:
         confidence_level = lang['v_high_confidence']
         estim_speed_ag = f"{round(np.mean([estim_speed_6,estim_speed_4]),2)} Bds ({confidence_level})"
+    else:        
+        confidence_level = lang['low_confidence']
+        estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
 
     popup = tk.Toplevel()
     popup.title(lang["frq_info"])
@@ -707,7 +732,7 @@ def display_frq_info():
         print("Largeur de bande estimée: ", bw, " Hz")
         print("Rapidité de modulation estimée avec la fonction mts: ", estim_speed_2, " Bauds")
         print("Rapidité de modulation estimée par spectre de puissance: ", estim_speed, " Bauds")
-        print("Rapidité de modulation estimée par signal puissance: ", estim_speed_3[0]*2, "/", estim_speed_3[1]*2, "Bauds")
+        print("Rapidité de modulation estimée par puissances d'ordre: ", estim_speed_3[0]*2, "/", estim_speed_3[1]*2, "Bauds")
         print("Rapidité de modulation estimée par transitions de fréquence: ", estim_speed_4, " Bauds")
         print("Rapidité de modulation estimée par spectre de l'enveloppe: ", estim_speed_5, " Bauds")
         print("Confiance dans l'estimation de rapidité de modulation: ", confidence, "/5")
@@ -1130,6 +1155,40 @@ def envelope_spectrum():
     canvas.draw()
     del envelope, f, peak_freq, canvas
 
+def clock_graph():
+    # Affichage de la fréquence d'horloge
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["clock_graph"])
+    print(lang["clock_graph"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    _, freq_diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
+    clock, freqs, mag = dm.estimate_baud_rate(freq_diff, s_rate,debug=debug)
+    if clock == 0 :
+        tk.messagebox.showinfo(lang["error"], lang["estim_failed"], parent=root)
+        return
+    if debug is True:
+        print("Fréquence de l'horloge estimée: ", clock, " Hz")
+    mag = mag / np.max(mag)
+    ax = plt.subplot()
+    ax.plot(freqs[:len(freqs)//2], mag[:len(mag)//2])
+    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
+    ax.set_ylabel(lang["norm_power"])
+    if abs(clock) > 25:
+        ax.axvline(x=clock, color='r', linestyle='--')
+        ax.set_title(f"{lang['estim_peak']} {round(clock,2)} Hz")
+    else:
+        ax.set_title(lang['estim_failed'])
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del clock, freqs, mag, freq_diff, canvas
+
 def dsp():
     # affichage de la densité spectrale de puissance et de la bande passante estimée
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, bw
@@ -1188,6 +1247,43 @@ def dsp_max():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     del canvas, wav_mag, f
+
+def correct_constellation_rotation():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, iq_sig
+    clear_plot()
+    if not filepath:
+        print(lang["no_file"])
+        return
+    # ordre : 2 pour BPSK, 4 pour QPSK, etc
+    order = tk.simpledialog.askstring(lang["rotation_correction"], lang["rotation_order"], parent=root)
+    if order is None:
+        if debug is True:
+            print("Correction de rotation de constellation non appliquée, valeur non définie")
+        return
+    iq_sig, theta = df.correct_constellation_rotation(iq_sig, int(order))
+    if debug is True:
+        print(f"Correction de rotation de constellation appliquée avec un ordre de {order}")
+        print(f"et une rotation de {theta} rad : ({np.degrees(theta)}°).")
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["constellation"])
+    print(lang["constellation"])
+    ax = plt.subplot()
+    iq_constel = iq_sig/np.max(np.abs(iq_sig))
+    ax.scatter(np.real(iq_constel), np.imag(iq_constel), s=1)
+    ax.set_xlabel("In-Phase")
+    ax.set_ylabel("Quadrature")
+    # convert theta en degrés et l'afficher dans le titre du graphe
+    degres = np.degrees(theta)
+    # round à 2 décimales et afficher dans le titre du graphe
+    ax.set_title(f"{lang['rotation_corrected']} : {np.round(degres,2):.2f}°")
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del canvas, theta, degres
 
 def constellation():
     # Affichage de la constellation du signal.
@@ -1842,7 +1938,7 @@ def demod_cpm_psk():
                 clock = target_rate
                 bits = dm.psk_demodulate(iq_sig, s_rate, clock, order, gray=gray, differential=differential, offset=offset, costas_damping=costas_damping, costas_bw_factor=costas_bw_factor)
             else:
-                clock = dm.estimate_baud_rate(diff, s_rate)
+                clock,_,_ = dm.estimate_baud_rate(diff, s_rate)
                 bits = dm.psk_demodulate(iq_sig, s_rate, clock, order, gray=gray, differential=differential, offset=offset, costas_damping=costas_damping, costas_bw_factor=costas_bw_factor)
             if differential and not offset:
                 alt_psk = "D"
@@ -2046,7 +2142,7 @@ def demod_mfsk():
     elif float(target_rate.get()) < 1:
         print("Pas de rapidité de démodulation définie. Essai aveugle")
         target_rate = None
-        clock = dm.estimate_baud_rate(freq_diff, s_rate, target_rate, precision, debug)
+        clock,_,_ = dm.estimate_baud_rate(freq_diff, s_rate, target_rate, precision, debug)
     else:
         clock = float(target_rate.get())
     order = int(param_order.get())
@@ -2066,7 +2162,8 @@ def demod_mfsk():
         if param_method.get() == "main":
             symbols, clock = dm.wpcr(freq_diff, s_rate, clock, tau, precision, debug)
         elif param_method.get() == "alt":
-        # EXPERIMENTAL
+        # Détection de tons par clustering pour MFSK, 
+        # plus robuste que la méthode discrète sur le signal différentiel
             tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_sig, s_rate, clock, order, mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_hop_factor, mfsk_bin_width_cluster_factor, mfsk_viterbi_penalty)     
             tone_freq /= np.max(np.abs(tone_freq))
             symbols, _ = dm.wpcr(tone_freq, s_rate, target_rate=None, tau=tau, precision=precision, debug=debug)
@@ -2362,7 +2459,7 @@ def eye_diagram():
         symbol_rate = None
         try:
             freq_diff = em.frequency_transitions(iq_sig, s_rate, window_size=diff_window, window_type=window_choice)[1]
-            symbol_rate = dm.estimate_baud_rate(freq_diff, s_rate, target_rate=baud_rate, precision=precision, debug=debug)
+            symbol_rate,_,_ = dm.estimate_baud_rate(freq_diff, s_rate, target_rate=baud_rate, precision=precision, debug=debug)
             if symbol_rate is None or symbol_rate <= 0:
                 symbol_rate = baud_rate
             if debug is True:
@@ -2721,6 +2818,10 @@ def load_lang_changes():
     window_submenu.add_command(label=lang["set_window"], command=set_window)
     window_submenu.add_command(label=lang["set_overlap"], command=set_overlap)
     mod_menu.add_cascade(label=lang["window_options"], menu=window_submenu)
+    # autres modifs en vrac
+    adds_submenu = tk.Menu(mod_menu,tearoff=0)
+    adds_submenu.add_command(label=lang["rotation_correction"], command=correct_constellation_rotation)
+    mod_menu.add_cascade(label=lang["adds_options"], menu=adds_submenu)
     # Lissage
     mod_menu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
     # Enregistrer nouveau wav
@@ -2754,6 +2855,7 @@ def load_lang_changes():
     speed_menu.add_command(label=lang["mts"], command=mts)
     speed_menu.add_command(label=lang["pseries"], command=pseries)
     speed_menu.add_command(label=lang["cyclospectrum"], command=cyclospectrum)
+    speed_menu.add_command(label=lang["clock_graph"], command=clock_graph)
     # ACF
     acf_menu.add_command(label=lang["autocorr"], command=autocorr)
     acf_menu.add_command(label=lang["autocorr_full"], command=autocorr_full)
