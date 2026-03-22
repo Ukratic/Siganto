@@ -52,7 +52,7 @@ Overlap.
 - Constellation
 - Phase Distribution
 - Phase Transitions
-- Eye Diagram (not synchronized)
+- Eye Diagram
 #### 8. Symbol Rate Metrics
 - Envelope Power Specturm
 - Power Envelope Spectrum
@@ -83,7 +83,7 @@ Overlap.
 -- Almost all parameters now accessible (options tab), no longer hardcoded.<br>
 -- SSB demod.<br>
 
-- *V1.10e* :<br>
+- *V1.10e-f* :<br>
 -- Added a graph for the (already used in baud rate estimation before demod) Clock Frequency Detection.<br>
 -- In additional options : Constellation Rotation Correction. Requires prior frequency correction.<br>
 
@@ -120,8 +120,8 @@ MP3 conversion requires ffmpeg and might also be a little sketchy depending on h
 - CIS-45 OFDM Parameters <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_7.png" alt="OFDM_params"/>
 
-- EDACS Frequency transitions <br>
-<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_8.png" alt="FSK_transitions"/>
+- EDACS Instantaneous Frequency <br>
+<img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_8.png" alt="Instantaneous Frequency"/>
 
 - AIS Demodulation <br>
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_9.png" alt="FSK_demod"/>

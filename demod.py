@@ -402,19 +402,30 @@ def detect_and_track_mfsk_auto(
             start = i
     runs.append(len(tone_idx) - start) # last run
 
-    if len(runs) > 0:
-        avg_run = np.median(runs) # median = robust against outliers
+    merged = []
+    i = 0
+    while i < len(runs):
+        if runs[i] == 1 and i > 0:
+            merged[-1] += 1
+        else:
+            merged.append(runs[i])
+        i += 1
+
+    if len(merged) > 0:
+        avg_run = np.median(merged) # median = robust against outliers
         measured_rate = 1.0 / (avg_run * dt)
     else:
         measured_rate = 0.0
 
     return tone_freqs, times, tone_idx, tone_trace, tone_pows, measured_rate
 
-def eye_diagram_with_metrics(samples, fs, baud_rate, channel="I", num_traces=500, symbols_per_trace=2):
-    # A prévoir pour rendre plus utile : intégrer correction de timing de phase
+def eye_diagram_with_metrics(samples, fs, baud_rate, mod_order, 
+                             channel="I", num_traces=500, symbols_per_trace=2,
+                             costas_bw_factor=0.01):
     """Trace un diagramme de l'oeil avec métriques associées"""
     # Sélection du canal
     if np.iscomplexobj(samples):
+        samples = costas_loop(samples, fs, loop_bandwidth=baud_rate*costas_bw_factor, order=mod_order)
         ch = channel.upper()
         if ch == "I":
             sig = samples.real
@@ -429,6 +440,7 @@ def eye_diagram_with_metrics(samples, fs, baud_rate, channel="I", num_traces=500
 
     # Estimation du nombre de points par symbole
     sps = fs / float(baud_rate)
+    samples = samples[int(0.1*len(samples)):]  # éviter les transitoires initiaux
     n_points = int(max(2, round(symbols_per_trace * sps)))
     time = np.linspace(0, symbols_per_trace, n_points, endpoint=False)
 

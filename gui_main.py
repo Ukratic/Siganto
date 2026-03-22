@@ -1,16 +1,17 @@
 """
 SigAnTo - Signal Analysis Toolbox - GUI
 Author: Arnaud Barraquand (@Ukratic)
-Date: 2024-11-21
+Date: 2024-11-21 -> 2026-03-15
 
-Description: GUI for signal analysis using Python. 
-4 main libraries are used: tkinter, matplotlib, numpy & scipy.
-Everything else is either a custom module or optional.
-The GUI allows the user to load a WAV file, display its spectrogram, DSP, and other graphs.
-Also, some signal modification functions : apply filters, cut the signal, move center frequency...
+A GUI for signal analysis using Python. 
+4 main libraries used : tkinter, matplotlib, numpy & scipy.
+Everything else is either native python, a custom module, or optional.
+The GUI allows the user to load a WAV file, display its spectrogram, DSP... and many other graphs.
+Some signal modification functions are available : apply filters, cut the signal, move the center frequency...
 And some estimations, mostly through graphs : Modulation, symbol rate, bandwidth, OFDM parameters.
 
-Many thanks to Dr Marc Lichtman - University of Maryland. Author of PySDR.
+Many thanks to Dr Marc Lichtman, author of PySDR.
+His guide was a great help & starter for the conception of this project.
 """
 import sys
 import os
@@ -690,15 +691,12 @@ def display_frq_info():
     other_conf_a = abs(estim_speed_2 - estim_speed)/estim_speed_2 + abs(estim_speed_3[1]*4 - estim_speed_5)/(estim_speed_3[1]*4)
     other_conf_b = abs(estim_speed_2 - estim_speed)/estim_speed_2 + abs(estim_speed_3[0]*2 - estim_speed_5)/(estim_speed_3[0]*2)
 
-    if confidence <= 1 and (estim_speed_6-estim_speed_5 < 0.1 or estim_speed_6-estim_speed < 0.1 or estim_speed_6-estim_speed_2 < 0.1):
+    if confidence <= 1 and (estim_speed_6-estim_speed_3)/estim_speed_6 < 0.1 and estim_speed_6 > bw/10 and estim_speed_6 < bw:
         confidence_level = lang['low_confidence']
         estim_speed_ag = f"{estim_speed_5} Bds ({confidence_level})"
-    elif confidence <= 1 and (other_conf_a <= 0.1 or other_conf_b <= 0.1) :
+    elif confidence <= 1 and (other_conf_a <= 0.1 or other_conf_b <= 0.1) and estim_speed_5 > bw/10 and estim_speed_5 < bw:
         confidence_level = lang['low_confidence']
         estim_speed_ag = f"{estim_speed_5} Bds ({confidence_level})"
-    elif confidence < 2:
-        confidence_level = lang['low_confidence']
-        estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
     elif confidence >= 2 and confidence < 3 and estim_speed_4 > bw/10 and estim_speed_4 < bw:
         confidence_level = lang['medium_confidence']
         estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
@@ -708,7 +706,7 @@ def display_frq_info():
     elif confidence >= 5 and estim_speed_6 > bw/10 and estim_speed_6 < bw:
         confidence_level = lang['v_high_confidence']
         estim_speed_ag = f"{round(np.mean([estim_speed_6,estim_speed_4]),2)} Bds ({confidence_level})"
-    else:        
+    else: # confidence < 2 sans consensus ou estimations hors bande passante
         confidence_level = lang['low_confidence']
         estim_speed_ag = f"{estim_speed_4} Bds ({confidence_level})"
 
@@ -1136,7 +1134,6 @@ def envelope_spectrum():
         return
     envelope, f, peak_freq = em.envelope_spectrum(iq_sig, s_rate)
     envelope = envelope / np.max(envelope)
-    print(peak_freq)
     ax = plt.subplot()
     ax.plot(f,envelope)
     if abs(peak_freq) > 25:
@@ -2166,6 +2163,8 @@ def demod_mfsk():
         # plus robuste que la méthode discrète sur le signal différentiel
             tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_sig, s_rate, clock, order, mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_hop_factor, mfsk_bin_width_cluster_factor, mfsk_viterbi_penalty)     
             tone_freq /= np.max(np.abs(tone_freq))
+            if debug is True:
+                print(f"Fréquences de tons MFSK détectées : {tone_freqs}")
             symbols, _ = dm.wpcr(tone_freq, s_rate, target_rate=None, tau=tau, precision=precision, debug=debug)
         if len(symbols) > 2:
             bits = dm.slice_mfsk(symbols, int(param_order.get()), mapping, return_format)
@@ -2214,6 +2213,8 @@ def demod_mfsk():
         fig.suptitle(lang["bits_fail"])
         ax = plt.subplot()
         ax.plot(0)
+        if debug is True:
+            print(f"Echec de démodulation MFSK : {e}")
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
     toolbar.update()
@@ -2238,7 +2239,10 @@ def demod_mfsk():
             text_output += formatted_bits
     except:
         bits, bits_plot, formatted_bits = "", "", ""
-        text_output = lang["bits_fail"]
+        if tone_freqs is not None:
+            text_output = f"{lang['bits_fail']}. {lang['mfsk_tones_detected']} {', '.join(map(str, tone_freqs))}."
+        else:
+            text_output = lang["bits_fail"]
     text_box.insert(tk.END, text_output)
     text_box.config(state=tk.DISABLED)
     del canvas, time, freq_diff, bits, bits_plot, formatted_bits, text_output, text_box
@@ -2470,8 +2474,13 @@ def eye_diagram():
                 return
     else:
         symbol_rate = baud_rate
+    mod_order = tk.simpledialog.askinteger(lang["eye_diagram"], lang["eye_order"], minvalue=2, parent=root)
+    if mod_order is None or mod_order < 2:
+        if debug is True:
+            print("Ordre de modulation non défini ou invalide.")
+        return
     try:
-        time, traces, metrics = dm.eye_diagram_with_metrics(iq_sig, s_rate, symbol_rate, eye_channel, eye_num_traces, eye_symbols)
+        time, traces, metrics = dm.eye_diagram_with_metrics(iq_sig, s_rate, symbol_rate, mod_order, eye_channel, eye_num_traces, eye_symbols, costas_bw_factor)
         if debug is True:
             print("Diagramme de l'oeil calculé")
             print("Metriques: ", metrics)

@@ -203,9 +203,10 @@ def get_fra_lib():
         "eye_height": "Hauteur de l'oeil",
         "eye_width": "Largeur de l'oeil",
         "eye_opening_ratio": "Ratio d'ouverture de l'oeil",
-        "eye_diagram": "Diagramme de l'oeil (non synchronisé)",
+        "eye_diagram": "Diagramme de l'oeil",
         "eye_metrics": "Métriques du diagramme de l'oeil",
-        "eye_fail": "Echec du tracé du diagramme de l'oeil. Vérifiez la rapidité de modulation et synchronisation du signal.",
+        "eye_fail": "Echec du tracé du diagramme de l'oeil. Vérifiez : débit symbole & synchronisation du signal.",
+        "eye_order" : "Sélectionner l'ordre de modulation pour le diagramme de l'oeil (seulement 2 ou 4 supporté)",
         "channel": "Canal",
         "morlet_cwt": "Transformée en ondelettes continues Morlet",
         "scalogram": "Scalogramme (CWT Morlet)",
@@ -254,6 +255,7 @@ def get_fra_lib():
         "rotation_corrected": "Constellation corrigée de la rotation",
         "clock_graph": "Détection de la fréquence d'horloge",
         "adds_options": "Options supplémentaires",
+        "mfsk_tones_detected": "Tons détectés aux fréquences (Hz):",
 
     }
     return fra_lib
@@ -461,9 +463,10 @@ def get_eng_lib():
         "eye_height": "Eye Height",
         "eye_width": "Eye Width",
         "eye_opening_ratio": "Eye Opening Ratio",
-        "eye_diagram": "Eye Diagram (not synchronized)",
+        "eye_diagram": "Eye Diagram",
         "eye_metrics": "Eye Diagram Metrics",
-        "eye_fail": "Eye diagram plotting failed. Check the symbol rate and signal synchronization.",
+        "eye_fail": "Eye diagram plotting failed. Check: symbol rate & signal synchronization.",
+        "eye_order" : "Select modulation order for eye diagram (only 2 or 4 supported)",
         "channel": "Channel",
         "morlet_cwt": "Morlet Continuous Wavelet Transform",
         "scalogram": "Scalogram (Morlet CWT)",
@@ -512,6 +515,7 @@ def get_eng_lib():
         "rotation_corrected": "Constellation corrected for rotation",
         "clock_graph": "Clock Frequency Detection",
         "adds_options": "Additional options",
+        "mfsk_tones_detected": "Tones detected at frequencies (Hz) :",
 
     }
     return eng_lib
