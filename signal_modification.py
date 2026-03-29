@@ -1,7 +1,7 @@
 """Fonctions de base pour appliquer un filtre, ré-échantillonner,
 corriger ou simuler un décalage Doppler, etc. sur un signal IQ."""
 
-from scipy.signal import butter, filtfilt, resample, medfilt, wiener, firwin, lfilter, convolve, resample_poly
+from scipy.signal import butter, filtfilt, resample, medfilt, wiener, firwin, convolve, resample_poly
 import numpy as np
 
 def bandpass_filter(iq_sig, lowcut, highcut, samp_rate, order=4):
@@ -120,8 +120,24 @@ def wiener_filter(iq_sig, size=None, noise=None):
         raise ValueError("Size doit être un entier positif.")
     if noise is not None and (not isinstance(noise, (int, float)) or noise < 0):
         raise ValueError("noise doit être un nombre positif ou zéro.")
+    real = wiener(np.real(iq_sig), mysize=size, noise=noise)
+    imag = wiener(np.imag(iq_sig), mysize=size, noise=noise)
 
-    return wiener(iq_sig, mysize=size, noise=noise) # application du filtre de Wiener de scipy
+    return real + 1j * imag # application du filtre de Wiener de scipy
+
+def spectral_soft_denoise(iq_sig, alpha=1.5):
+    # Applique une atténuation dans le domaine fréquentiel pour réduire le bruit sous le seuil défini par alpha * bruit
+    spectrum = np.fft.fft(iq_sig)
+    mag = np.abs(spectrum)
+
+    noise_floor = np.median(mag)
+    threshold = alpha * noise_floor
+
+    # Soft : atténuation progressive au lieu de suppression brutale
+    gain = np.clip((mag - threshold) / mag, 0, 1)
+    spectrum *= gain
+
+    return np.fft.ifft(spectrum)
 
 def fir_filter(iq_sig, fs, cutoff, filter_type='lowpass', numtaps=101,window='hamming'):
     """Applique un filtre FIR (Finite Impulse Response) pour filtrer le signal IQ"""
@@ -138,7 +154,7 @@ def fir_filter(iq_sig, fs, cutoff, filter_type='lowpass', numtaps=101,window='ha
     norm_cutoff = cutoff / nyq if np.isscalar(cutoff) else [c / nyq for c in cutoff]
     taps = firwin(numtaps, norm_cutoff, window=window, pass_zero=filter_type) # conception du filtre FIR
 
-    return lfilter(taps, 1.0, iq_sig)
+    return filtfilt(taps, 1.0, iq_sig)
 
 def matched_filter(iq_sig, samp_rate, symbol_rate, factor=0.5, pulse_shape='rectangular'):
     """Applique un filtre adapté pour un motif spécifique dans le signal"""

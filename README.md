@@ -85,7 +85,9 @@ Overlap.
 
 - *V1.10e-f* :<br>
 -- Added a graph for the (already used in baud rate estimation before demod) Clock Frequency Detection.<br>
--- In additional options : Constellation Rotation Correction. Requires prior frequency correction.<br>
+-- In additional options : Constellation Rotation Correction. Requires prior frequency offset correction.<br>
+-- Added a spectral denoising filter. Moving average & median filter moved to legacy filtering options.<br>
+-- Added a cursor coordinates window in display settings. Captures cursor markers in a copyable list.<br>
 
 ### Using the app
 1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>

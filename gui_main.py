@@ -146,6 +146,7 @@ mfsk_win_factor = 1.0  # facteur de taille de fenêtre par défaut pour MFSK
 mfsk_hop_factor = 0.25  # facteur de saut par défaut pour MFSK
 mfsk_bin_width_cluster_factor = 1.2 # facteur de largeur de bin par défaut pour MFSK
 mfsk_viterbi_penalty = 0.05  # pénalité Viterbi par défaut pour MFSK
+alpha_noise = 1.2 # facteur de seuil pour le débruitage spectral, à ajuster selon les besoins
 
 # Frame pour les graphes
 plot_frame = tk.Frame(root)
@@ -691,7 +692,7 @@ def display_frq_info():
     other_conf_a = abs(estim_speed_2 - estim_speed)/estim_speed_2 + abs(estim_speed_3[1]*4 - estim_speed_5)/(estim_speed_3[1]*4)
     other_conf_b = abs(estim_speed_2 - estim_speed)/estim_speed_2 + abs(estim_speed_3[0]*2 - estim_speed_5)/(estim_speed_3[0]*2)
 
-    if confidence <= 1 and (estim_speed_6-estim_speed_3)/estim_speed_6 < 0.1 and estim_speed_6 > bw/10 and estim_speed_6 < bw:
+    if confidence <= 1 and (estim_speed_6-estim_speed_3[0]*2)/estim_speed_6 < 0.1 and estim_speed_6 > bw/10 and estim_speed_6 < bw:
         confidence_level = lang['low_confidence']
         estim_speed_ag = f"{estim_speed_5} Bds ({confidence_level})"
     elif confidence <= 1 and (other_conf_a <= 0.1 or other_conf_b <= 0.1) and estim_speed_5 > bw/10 and estim_speed_5 < bw:
@@ -1770,6 +1771,45 @@ def on_click(event):
             if len(cursor_points) == 2:
                 print("Delta_x: ", dx, " Delta_y: ", dy)
 
+ # Fonction de sauvegarde des coordonnées des points cliqués dans une fenêtre dédiée
+def open_coordinates_window():
+    global cursor_points, cursor_lines, distance_text
+    # sans effet si pas de fichier chargé
+    if not filepath:
+        print(lang["no_file"])
+        return
+    coord_window = tk.Toplevel()
+    place_relative(coord_window, root, 300, 200)
+    coord_window.title(lang["coord_window"])
+    text_area = tk.Text(coord_window, wrap=tk.NONE)
+    text_area.pack(fill=tk.BOTH, expand=True)
+    scrollbar_y = tk.Scrollbar(coord_window, orient=tk.VERTICAL, command=text_area.yview)
+    scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+    text_area.config(yscrollcommand=scrollbar_y.set)
+    # Rappel pour enregistrer les coordonnées des clics dans la zone de texte
+    def on_click_save_coords(event):
+        if event.inaxes:
+            coord_text = f"({event.xdata:.6f}, {event.ydata:.6f})\n"
+            text_area.insert(tk.END, coord_text)
+    # Connecte l'événement de clic à la fonction d'enregistrement des coordonnées
+    click_event_id = fig.canvas.mpl_connect('button_press_event', on_click_save_coords)
+    # Ferme la fenêtre de coordonnées et désactive le mode curseur
+    def close_window():
+        fig.canvas.mpl_disconnect(click_event_id)
+        toggle_cursor_mode()
+        coord_window.destroy()
+    coord_window.protocol("WM_DELETE_WINDOW", close_window)
+    # Si le mode curseur désactivé, l'active pour permettre de cliquer sur le graphe
+    if not cursor_mode:
+        toggle_cursor_mode()
+    # Empêche de désactiver le mode curseur tant que la fenêtre de coordonnées est ouverte
+    def disable_cursor_toggle():
+        mode_button.config(state=tk.DISABLED)
+    def enable_cursor_toggle():
+        mode_button.config(state=tk.NORMAL)
+    mode_button.config(state=tk.DISABLED)
+    coord_window.bind("<Destroy>", lambda event: enable_cursor_toggle())
+
 # Nettoie curseurs
 def clear_cursors():
     global cursor_points, cursor_lines, distance_text
@@ -2095,7 +2135,6 @@ def demod_ssb():
             return
     plot_other_graphs()
 
-# EXPERIMENTAL
 def demod_mfsk():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     time, freq_diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
@@ -2405,6 +2444,20 @@ def apply_wiener_filter():
             print(f"Erreur lors de l'application du filtre Wiener: {e}")
     plot_initial_graphs()
 
+def apply_spectral_denoise():
+    global iq_sig
+    if not filepath:
+        print(lang["no_file"])
+        return
+    try:
+        iq_sig = sm.spectral_soft_denoise(iq_sig, alpha_noise)
+        if debug is True:
+            print(f"Débruitage spectral appliqué avec un seuil de {alpha_noise} fois le niveau de bruit estimé")
+    except Exception as e:
+        if debug:
+            print(f"Erreur lors de l'application du débruitage spectral: {e}")
+    plot_initial_graphs()
+
 # Fonction pour appliquer un filtre adapté
 def apply_matched_filter():
     global iq_sig, s_rate
@@ -2636,13 +2689,17 @@ def advanced_settings():
     global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
     global scf_alpha_step, costas_damping, costas_bw_factor, eye_channel, eye_num_traces, eye_symbols
     global mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_viterbi_penalty, mfsk_bin_width_cluster_factor, mfsk_hop_factor
+    global alpha_noise
     # Popup pour les paramètres avancés
     popup = tk.Toplevel()
     popup.title(lang["advanced_settings"])
-    place_relative(popup, root, 600, 750)
+    place_relative(popup, root, 600, 800)
     tk.Label(popup, text=lang["filter_order"]).pack()
     filter_order_var = tk.IntVar(value=filter_order) # valeur initiale
     tk.Entry(popup, textvariable=filter_order_var).pack() # ordre du filtre Butterworth
+    tk.Label(popup, text=lang["alpha_noise"]).pack()
+    alpha_noise_var = tk.DoubleVar(value=alpha_noise)
+    tk.Entry(popup, textvariable=alpha_noise_var).pack() # alpha pour débruitage spectral
     tk.Label(popup, text=lang["peak_prominence"]).pack()
     peak_prominence_var = tk.DoubleVar(value=peak_prominence)
     tk.Entry(popup, textvariable=peak_prominence_var).pack() # proéminence des pics pour centrage
@@ -2702,9 +2759,11 @@ def advanced_settings():
         nonlocal eye_channel_var, eye_num_traces_var, eye_symbols_var
         nonlocal mfsk_tresh_db_var, mfsk_peak_prom_db_var, mfsk_win_factor_var, mfsk_viterbi_penalty_var
         nonlocal mfsk_cluster_bin_width_factor_var, mfsk_hop_factor_var
+        nonlocal alpha_noise_var
         global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
         global scf_alpha_step, costas_damping, costas_bw_factor, eye_channel, eye_num_traces, eye_symbols
         global mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_viterbi_penalty, mfsk_bin_width_cluster_factor, mfsk_hop_factor
+        global alpha_noise
         filter_order = filter_order_var.get()
         peak_prominence = peak_prominence_var.get()
         acf_min_distance = acf_min_distance_var.get()
@@ -2724,6 +2783,7 @@ def advanced_settings():
         mfsk_hop_factor = mfsk_hop_factor_var.get()
         mfsk_bin_width_cluster_factor = mfsk_cluster_bin_width_factor_var.get()
         mfsk_viterbi_penalty = mfsk_viterbi_penalty_var.get()
+        alpha_noise = alpha_noise_var.get()
         if debug is True:
             print(f"Paramètres avancés mis à jour : "
                   f"filter_order={filter_order}, peak_prominence={peak_prominence}, acf_min_distance={acf_min_distance}, "
@@ -2732,7 +2792,7 @@ def advanced_settings():
                   f"eye_channel={eye_channel}, eye_num_traces={eye_num_traces}, eye_symbols={eye_symbols}, "
                   f"mfsk_tresh_db={mfsk_tresh_db}, mfsk_peak_prom_db={mfsk_peak_prom_db}, mfsk_win_factor={mfsk_win_factor}, "
                   f"mfsk_hop_factor={mfsk_hop_factor}, mfsk_bin_width_cluster_factor={mfsk_bin_width_cluster_factor}, "
-                  f"mfsk_viterbi_penalty={mfsk_viterbi_penalty}")
+                  f"mfsk_viterbi_penalty={mfsk_viterbi_penalty}, alpha_noise={alpha_noise}")
         popup.destroy()
     tk.Button(popup, text="OK", command=save_settings).pack()
 
@@ -2798,6 +2858,7 @@ def load_lang_changes():
     param_submenu.add_command(label=lang["param_hist_bins"],command=set_hist_bins)
     param_submenu.add_command(label=lang["advanced_settings"], command=advanced_settings)
     info_menu.add_cascade(label=lang["params"], menu=param_submenu)
+    info_menu.add_command(label=lang["coord_window"], command=open_coordinates_window)
     # Changer langue. Label "English" si langue = fr, "Français" si langue = en
     lang_switch = "Switch language: English" if lang['lang'] == "Français" else "Changer langue: Français"
     info_menu.add_command(label=lang_switch, command=change_lang)
@@ -2838,11 +2899,14 @@ def load_lang_changes():
     # Menu Filtre
     filter_menu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
     filter_menu.add_command(label=lang["filter_band"], command=apply_filter_band)
-    filter_menu.add_command(label=lang["median_filter"], command=apply_median_filter)
-    filter_menu.add_command(label=lang["moving_average"], command=apply_moving_average)
+    filter_menu.add_command(label=lang["spectral_denoise"], command=apply_spectral_denoise)
     filter_menu.add_command(label=lang["wiener_filter"], command=apply_wiener_filter)
     filter_menu.add_command(label=lang["fir_filter"], command=apply_fir_filter)
     filter_menu.add_command(label=lang["matched_filter"], command=apply_matched_filter)
+    filt_submenu = tk.Menu(filter_menu, tearoff=0)
+    filt_submenu.add_command(label=lang["median_filter"], command=apply_median_filter)
+    filt_submenu.add_command(label=lang["moving_average"], command=apply_moving_average)
+    filter_menu.add_cascade(label=lang["filter_legacy"], menu=filt_submenu)
     # Analyse du signal
     # Puissance
     power_menu.add_command(label=lang["dsp"], command=dsp)

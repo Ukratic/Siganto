@@ -256,6 +256,10 @@ def get_fra_lib():
         "clock_graph": "Détection de la fréquence d'horloge",
         "adds_options": "Options supplémentaires",
         "mfsk_tones_detected": "Tons détectés aux fréquences (Hz):",
+        "coord_window": "Coordonnées des curseurs",
+        "spectral_denoise": "Débruitage spectral",
+        "alpha_noise": "Seuil multiplicatif sur le niveau de bruit pour le débruitage spectral (1.2 par défaut) [float]",
+        "filter_legacy": "Filtres classiques",
 
     }
     return fra_lib
@@ -516,6 +520,10 @@ def get_eng_lib():
         "clock_graph": "Clock Frequency Detection",
         "adds_options": "Additional options",
         "mfsk_tones_detected": "Tones detected at frequencies (Hz) :",
+        "coord_window": "Cursor Coordinates",
+        "spectral_denoise": "Spectral Denoising",
+        "alpha_noise": "Multiplicative threshold on noise level for spectral denoising (default 1.2) [float]",
+        "filter_legacy": "Legacy filters",
 
     }
     return eng_lib
