@@ -6,6 +6,7 @@ Fonctions d'estimation des paramètres de modulation d'un signal IQ :
 
 import numpy as np
 import dsp_funcs as df
+from scipy.signal import find_peaks
 ##
 # Fonctions mesures de la rapidité de modulation
 ##
@@ -98,33 +99,33 @@ def power_series(iq_sig, samp_rate):
     return f, squared_metric, quartic_metric, peak_squared_freq, peak_quartic_freq
 
 # Cyclospectre
-def cyclic_spectrum_fft(iq_sig, samp_rate, alpha_list):
-    """Cyclospectre FFT. Retourne la corrélation cyclique pour une liste de fréquences alpha."""
+def cyclic_spectrum_fft(iq_sig):
+    """Cyclospectre FFT. Retourne la magnitude du cyclospectre pour une 
+    fenêtre donnée du signal."""
     N = len(iq_sig)
     y = np.abs(iq_sig)**2  # |x[n]|^2
+    y = y / np.mean(y)
     Y = np.fft.fftshift(np.fft.fft(y, n=N))
-    freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1/samp_rate)) # axe des fréquences
-    # Interpolation de FFT puissance pour la liste de fréquences alpha
+    # On peut aussi retourner la partie complexe du cyclospectre pour une analyse plus approfondie,
+    # mais ici on se concentre sur la magnitude pour l'estimation de la rapidité de modulation
     magnitude = np.abs(Y)
-    cyclic_corr = np.interp(alpha_list, freqs, magnitude)
-    return cyclic_corr
+    return magnitude
 
 def cyclic_spectrum_sliding_fft(iq_sig, samp_rate, window, frame_len=512, step=256):
     """Cyclospectre avec FFT glissante.
-    Estimation de la rapidité de modulation basée sur la moyenne du cyclospectre.
-    Demande plus de calculs (nb d'échantillons conséquent) 
-    mais plus robuste que d'une seule FFT sur tout le signal."""
+    Estimation de la rapidité de modulation basée sur la moyenne de la corrélation cyclique 
+    sur plusieurs fenêtres glissantes."""
     window = df.get_window(window, frame_len)
     # fréquences cycliques
-    alpha_list = np.linspace(-samp_rate/2, samp_rate/2, int(np.log(len(iq_sig))*1000)) 
+    freqs_list = np.fft.fftshift(np.fft.fftfreq(frame_len, d=1/samp_rate)) # axe des fréquences
     # Initialisation de l'accumulateur de corrélation cyclique
-    cyclic_corr_accum = np.zeros(len(alpha_list))
+    cyclic_corr_accum = np.zeros(len(freqs_list))
     frame_count = 0
 
     for start in range(0, len(iq_sig) - frame_len + 1, step):
         frame = iq_sig[start:start + frame_len]
         frame_win = frame * window
-        cyclic_corr = cyclic_spectrum_fft(frame_win, samp_rate, alpha_list)
+        cyclic_corr = cyclic_spectrum_fft(frame_win)
         cyclic_corr_accum += cyclic_corr
         frame_count += 1
 
@@ -132,15 +133,48 @@ def cyclic_spectrum_sliding_fft(iq_sig, samp_rate, window, frame_len=512, step=2
 
     # On retire les pics de puissance autour de 0 Hz pour déterminer la rapidité de modulation
     discard_dc = np.abs(cyclic_corr_avg)
-    zero_index = np.abs(alpha_list).argmin()
+    zero_index = np.abs(freqs_list).argmin()
     discard_dc[zero_index-10:zero_index+10] = 0
     peak_freq_index = np.argmax(discard_dc)
-    peak_freq = alpha_list[peak_freq_index]
+    peak_freq = freqs_list[peak_freq_index]
     # pas de pic de fréquence si ce n'est pas clairement au-dessus du bruit
-    if np.max(discard_dc) < 2*np.mean(discard_dc):
+    if np.max(discard_dc) < 2*np.median(discard_dc):
         peak_freq = 0
 
-    return alpha_list, cyclic_corr_avg, peak_freq
+    return freqs_list, cyclic_corr_avg, peak_freq
+
+def cepstral_estimator(iq_sig, sample_rate, window='hann', fmin=None, fmax=None):
+    x = np.abs(iq_sig)**2
+    x = x - np.mean(x)
+    N = len(x)
+    N_fft = 8 * N   # zero padding pour une meilleure résolution en quefrency
+    window = df.get_window(window, N)
+    # Spectrum
+    X = np.fft.fft(x * window, n=N_fft)
+    mag = np.abs(X) + 1e-12  # éviter log(0)
+    mag[0:10] = np.mean(mag)  # ignore basses quefrencies
+    mag = mag / np.max(mag)
+    mag = np.maximum(mag, 1e-6)
+    # Cepstrum
+    cep = np.fft.ifft(np.log(mag)).real
+    # Axe des quefrencies
+    q = np.arange(N_fft) / sample_rate
+    # Ignore les quefrencies trop basses ou trop hautes
+    min_q = 1 / (fmax if fmax else sample_rate/2)
+    max_q = 1 / (fmin if fmin else sample_rate/1000)
+    mask = (q > min_q) & (q < max_q)
+    if not np.any(mask):
+        return 0, q, cep
+    # recherche de pic dans le cepstrum pour estimer la rapidité de modulation
+    peaks, properties = find_peaks(cep[mask],prominence=np.std(cep[mask]) * 0.5)
+    if len(peaks) == 0:
+        return 0, q, cep
+    
+    best_peak = peaks[np.argmax(properties["prominences"])]
+    q_peak = q[mask][best_peak]
+    sr = 1 / q_peak
+
+    return sr, q, cep
 
 ##
 # Fonctions de mesures temporelles
@@ -383,3 +417,21 @@ def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
     N = N - 1
 
     return Tu, Tg, Ts, Df, N
+
+def power_signal(iq_sig, samp_rate, power=2):
+    """Signal à la puissance demandée pour corriger la fréquence centrale
+    avec le résidu de porteuse"""
+    f = np.linspace(samp_rate/-2, samp_rate/2, len(iq_sig))
+    # puissance du signal à la puissance N
+    # prevenir les overflow en normalisant avant de prendre la puissance
+    norm_sig = iq_sig / np.max(np.abs(iq_sig))
+    samples_power = norm_sig**power
+    powered_sig = np.abs(np.fft.fftshift(np.fft.fft(samples_power)))/len(iq_sig)
+    # chercher le pic de fréquence dans le signal à la puissance N pour estimer la fréquence centrale résiduelle
+    peak_freq_index = np.argmax(powered_sig)
+    peak_freq = f[peak_freq_index]
+    # offset de la fréquence centrale résiduelle en prenant en compte la puissance N : si power=2, la fréquence résiduelle est à 2*peak_freq, etc.
+    if power > 1:
+        peak_freq = peak_freq / power
+    
+    return f, powered_sig, peak_freq

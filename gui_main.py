@@ -69,7 +69,7 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
-icon_path = resource_path("radio-waves.ico")
+icon_path = resource_path("waves.ico")
 
 # Fenêtre de chargement
 t = Thread(target=loading_libs, daemon=True)
@@ -130,6 +130,7 @@ tau_modifier = 2 # multiplicateur de tau pour WPCR
 tau = np.pi * tau_modifier # constante tau pour WPCR
 precision = 0.9 # précision par défaut de recherche de rapidité de modulation
 filter_order = 4 # ordre des filtres par défaut (Butterworth)
+filter_kind = 'Butterworth' # type de filtre par défaut (Butterworth)
 peak_prominence = 0.1 # proéminence des pics pour le centrage du signal
 morlet_fc = 6.0  # param de fréquence centrale par défaut pour ondelette de Morlet
 morlet_nfreq = 96  # nombre de fréquences par défaut pour CWT Morlet
@@ -152,26 +153,39 @@ alpha_noise = 1.2 # facteur de seuil pour le débruitage spectral, à ajuster se
 plot_frame = tk.Frame(root)
 plot_frame.pack(fill=tk.BOTH, expand=True)
 
-# Fonctions de chargement de fichier WAV
+# Fonctions de chargement de fichier WAV & conversion en IQ, avec vérification de l'encodage et des canaux
 def find_sample_width(file_path):
-    """Lit les 44 premiers bytes du fichier WAV,
-    pour trouver le nombre de bits par échantillon et le format d'encodage."""
-    with open(file_path,'rb') as wav_file:
-        header = wav_file.read(44) # Premiers 44 bytes = réservés header
-        # vérifie si c'est un fichier WAV standard et lit les infos d'encodage
-        if header[:4] != b'RIFF' or header[8:12] != b'WAVE' or header[12:16] != b'fmt ': 
+    with open(file_path, 'rb') as f:
+        # Check RIFF/WAVE
+        if f.read(4) != b'RIFF':
             tk.messagebox.showerror(lang["error"], lang["invalid_wav"], parent=root)
             raise ValueError(lang["invalid_wav"])
-        bits_per_sample  = struct.unpack('<H', header[34:36])[0]
-        audio_format = struct.unpack('<H', header[20:22])[0]
-        if bits_per_sample not in [8, 16, 24, 32, 64]:
-            tk.messagebox.showerror(lang["error"], lang["unsupported_bits"], parent=root)
-            raise ValueError(lang["unsupported_bits"])
-        if audio_format not in [1, 3]:  # PCM ou IEEE float
-            tk.messagebox.showerror(lang["error"], lang["unsupported_format"], parent=root)
-            raise ValueError(lang["unsupported_format"])
-        audio_format = "PCM" if audio_format == 1 else "IEEE float"
-    return bits_per_sample , audio_format
+        f.read(4)  # skip taille du fichier
+        if f.read(4) != b'WAVE':
+            tk.messagebox.showerror(lang["error"], lang["invalid_wav"], parent=root)
+            raise ValueError(lang["invalid_wav"])
+        # recherche du chunk "fmt" pour trouver le format d'encodage & bits par échantillon
+        while True:
+            chunk_id = f.read(4)
+            if len(chunk_id) < 4:
+                tk.messagebox.showerror(lang["error"], lang["invalid_wav"], parent=root)
+                raise ValueError(lang["invalid_wav"])
+            chunk_size = struct.unpack('<I', f.read(4))[0]
+            if chunk_id == b'fmt ':
+                fmt_data = f.read(chunk_size)
+                audio_format = struct.unpack('<H', fmt_data[0:2])[0]
+                bits_per_sample = struct.unpack('<H', fmt_data[14:16])[0]
+                if bits_per_sample not in [8, 16, 24, 32, 64]:
+                    tk.messagebox.showerror(lang["error"], lang["unsupported_bits"], parent=root)
+                    raise ValueError(lang["unsupported_bits"])
+                if audio_format not in [1, 3]:
+                    tk.messagebox.showerror(lang["error"], lang["unsupported_format"], parent=root)
+                    raise ValueError(lang["unsupported_format"])
+                audio_format = "PCM" if audio_format == 1 else "IEEE float"
+                return bits_per_sample, audio_format
+            else:
+                # skip, on avance dans le fichier pour trouver le chunk "fmt"
+                f.seek(chunk_size, 1)
 
 def load_wav():
     """Charge un fichier WAV, convertit en I/Q,
@@ -388,7 +402,15 @@ def plot_other_graphs():
 
     # Constellation
     iq_constel = iq_sig/np.max(np.abs(iq_sig))
-    line_constellation = ax[1].scatter(np.real(iq_constel), np.imag(iq_constel), s=1)
+    if len(iq_constel) > 1000:
+        grid_size = int(np.sqrt(len(iq_constel) // 2))  # Ajuster la taille de la grille en fonction du nombre de points
+    else:
+        grid_size = 200
+    # si il n'y a pas assez de points, on affiche un scatter plot classique
+    if len(iq_constel) > 400:
+        line_constellation = ax[1].hexbin(np.real(iq_constel), np.imag(iq_constel), gridsize=grid_size, cmap='jet', bins='log', mincnt=1)
+    else:
+        line_constellation = ax[1].scatter(np.real(iq_constel), np.imag(iq_constel), s=5)
     ax[1].set_xlabel("In-Phase")
     ax[1].set_ylabel("Quadrature")
 
@@ -729,7 +751,7 @@ def display_frq_info():
         print("Niveau le plus bas: ", low_lvl)
         print("Niveau moyen en dB: ", mean_lvl)
         print("Largeur de bande estimée: ", bw, " Hz")
-        print("Rapidité de modulation estimée avec la fonction mts: ", estim_speed_2, " Bauds")
+        print("Rapidité de modulation estimée avec le spectre des transitions: ", estim_speed_2, " Bauds")
         print("Rapidité de modulation estimée par spectre de puissance: ", estim_speed, " Bauds")
         print("Rapidité de modulation estimée par puissances d'ordre: ", estim_speed_3[0]*2, "/", estim_speed_3[1]*2, "Bauds")
         print("Rapidité de modulation estimée par transitions de fréquence: ", estim_speed_4, " Bauds")
@@ -806,9 +828,9 @@ def apply_filter_high_low():
             print("Filtre passe-", filter_type.get(), " non appliqué. Fréquence de coupure non définie")
         return
     if filter_type.get() == lang["low_val"]:
-        iq_sig = sm.lowpass_filter(iq_sig, float(cutoff.get()), s_rate, filter_order)
+        iq_sig = sm.lowpass_filter(iq_sig, float(cutoff.get()), s_rate, filter_order, filter_kind)
     elif filter_type.get() == lang["high_val"]:
-        iq_sig = sm.highpass_filter(iq_sig, float(cutoff.get()), s_rate, filter_order)
+        iq_sig = sm.highpass_filter(iq_sig, float(cutoff.get()), s_rate, filter_order,filter_kind)
     if debug is True:
         print("Filtre passe-", filter_type.get(), " appliqué. Fréquence de coupure: ", cutoff.get(), "Hz")
     plot_initial_graphs()
@@ -834,7 +856,7 @@ def apply_filter_band():
     elif lowcut.get() == "" and highcut.get() == "":
         return
     else:
-        iq_sig = sm.bandpass_filter(iq_sig, float(lowcut.get()), float(highcut.get()), s_rate, filter_order)
+        iq_sig = sm.bandpass_filter(iq_sig, float(lowcut.get()), float(highcut.get()), s_rate, filter_order, filter_kind)
     if debug is True:
         print("Filtre passe-bande appliqué. Fréquence de coupure basse: ", lowcut.get(), "Hz")
         print("Fréquence de coupure haute: ", highcut.get(), "Hz")
@@ -1100,7 +1122,7 @@ def cyclospectrum():
     if not filepath:
         print(lang["no_file"])
         return
-    f, cyclic_corr_avg, peak_freq = em.cyclic_spectrum_sliding_fft(iq_sig, s_rate, window=window_choice, frame_len=N, step=overlap)
+    f, cyclic_corr_avg, peak_freq = em.cyclic_spectrum_sliding_fft(iq_sig, s_rate, window=window_choice, frame_len=N*2, step=overlap*2)
     f = np.linspace(s_rate/-2, s_rate/2, len(cyclic_corr_avg))
     cyclic_corr_avg = cyclic_corr_avg / np.max(cyclic_corr_avg)
     ax = plt.subplot()
@@ -1122,6 +1144,44 @@ def cyclospectrum():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     del cyclic_corr_avg, f, peak_freq, canvas
+
+def cepstrum():
+    # Cepstre
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["cepstrum"])
+    print(lang["cepstrum"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    peak_freq, q, cepstrum = em.cepstral_estimator(iq_sig, s_rate, window=window_choice)
+    cepstrum = cepstrum / np.max(cepstrum)
+    cep_filtered = np.copy(cepstrum)
+    cep_filtered[:5] = 0
+
+    mask = q > 0  # avoid division by zero
+    freq_axis = 1 / q[mask]
+    cep_valid = cep_filtered[mask]
+    
+    ax = plt.subplot()
+    ax.plot(freq_axis,cep_valid)
+    if abs(peak_freq) > 25:
+        ax.axvline(x=-peak_freq, color='r', linestyle='--')
+        ax.axvline(x=peak_freq, color='r', linestyle='--')
+        ax.set_title(f"{lang['estim_peak']} {round(peak_freq,2)} Hz")
+    else:
+        ax.set_title(lang['estim_failed'])
+    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
+    ax.set_ylabel(lang["cepstrum"])
+    ax.set_xlim(0, s_rate / 2)
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del cepstrum, q, peak_freq, canvas
 
 def envelope_spectrum():
     # Spectre de l'enveloppe du signal
@@ -1263,25 +1323,8 @@ def correct_constellation_rotation():
         print(f"Correction de rotation de constellation appliquée avec un ordre de {order}")
         print(f"et une rotation de {theta} rad : ({np.degrees(theta)}°).")
     clear_plot()
-    fig = plt.figure()
-    fig.suptitle(lang["constellation"])
-    print(lang["constellation"])
-    ax = plt.subplot()
-    iq_constel = iq_sig/np.max(np.abs(iq_sig))
-    ax.scatter(np.real(iq_constel), np.imag(iq_constel), s=1)
-    ax.set_xlabel("In-Phase")
-    ax.set_ylabel("Quadrature")
-    # convert theta en degrés et l'afficher dans le titre du graphe
-    degres = np.degrees(theta)
-    # round à 2 décimales et afficher dans le titre du graphe
-    ax.set_title(f"{lang['rotation_corrected']} : {np.round(degres,2):.2f}°")
-
-    canvas = FigureCanvasTkAgg(fig, plot_frame)
-    toolbar = NavigationToolbar2Tk(canvas, root)
-    toolbar.update()
-    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-    canvas.draw()
-    del canvas, theta, degres
+    constellation()
+    ax.set_title(f"{lang['rotation_corrected']} : {np.round(np.degrees(theta),2):.2f}°")
 
 def constellation():
     # Affichage de la constellation du signal.
@@ -1296,7 +1339,19 @@ def constellation():
         return
     ax = plt.subplot()
     iq_constel = iq_sig/np.max(np.abs(iq_sig))
-    ax.scatter(np.real(iq_constel), np.imag(iq_constel), s=1)
+    if len(iq_constel) > 1000:
+        grid_size = int(np.sqrt(len(iq_constel) // 2))  # Ajuster la taille de la grille en fonction du nombre de points
+    else:
+        grid_size = 200
+    # si il n'y a pas assez de points, on affiche un scatter plot classique
+    if len(iq_constel) > 400:
+        ax.hexbin(np.real(iq_constel), np.imag(iq_constel), gridsize=grid_size, cmap='jet', bins='log', mincnt=1)
+    else:
+        ax.scatter(np.real(iq_constel), np.imag(iq_constel), s=5)
+    # autre méthode d'affichage de la constellation envisageable : histogramme 2D
+    # h, xedges, yedges = np.histogram2d(np.real(iq_constel),np.imag(iq_constel),bins=grid_size)
+    # h = np.log1p(h)  # log scaling
+    # ax.imshow(h.T,origin='lower',cmap="jet",extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],aspect='equal')
     ax.set_xlabel("In-Phase")
     ax.set_ylabel("Quadrature")
 
@@ -1306,6 +1361,40 @@ def constellation():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     del canvas
+
+def signal_power():
+    # Affichage du signal à puissance N
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["signal_power"])
+    print(lang["signal_power"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    ax = plt.subplot()
+    # demander à l'utilisateur l'ordre de la puissance
+    req_order = tk.simpledialog.askstring(lang["signal_power"], lang["power_order"], parent=root)
+    if req_order is None:
+        return
+    f, sig_pow, c_residue = em.power_signal(iq_sig,s_rate,int(req_order))
+    ax.plot(f, sig_pow)
+    ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
+    ax.set_ylabel(lang["norm_power"] + f" ^{req_order}")
+    if c_residue is not None:
+        ax.axvline(x=c_residue*int(req_order), color='r', linestyle='--')
+        ax.set_title(f"{lang['residue_estimate']}")
+        # ajouter une information : le pic de résidu n'est valable que s'il est central.
+        ax.text(c_residue*int(req_order), ax.get_ylim()[1]*0.9, f"{lang['residue_peak']} {round(c_residue,3)} Hz", color='r', ha='center')
+        if debug is True:
+            print("Résidu de porteuse trouvé à ", round(c_residue,3), " Hz")
+
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del f, sig_pow, c_residue, canvas
 
 # Fonctions d'autocorrélation
 def autocorr():
@@ -1809,6 +1898,8 @@ def open_coordinates_window():
         mode_button.config(state=tk.NORMAL)
     mode_button.config(state=tk.DISABLED)
     coord_window.bind("<Destroy>", lambda event: enable_cursor_toggle())
+    # Nettoie pour éviter les conflits avec les autres fonctions de curseurs
+    clear_cursors()
 
 # Nettoie curseurs
 def clear_cursors():
@@ -1849,7 +1940,8 @@ def place_relative(popup, parent, w=300, h=200):
 # sauvegarde le signal (modifié ou non) en nouveau fichier wav
 def save_as_wav():
     global iq_sig, s_rate
-    filename = tk.filedialog.asksaveasfilename(title=lang["save_wav"],defaultextension=".wav", filetypes=[("Waveform Audio File", "*.wav"), ("All Files", "*.*")])
+    filename = tk.filedialog.asksaveasfilename(title=lang["save_wav"],
+        defaultextension=".wav", filetypes=[("Waveform Audio File", "*.wav"), ("All Files", "*.*")])
     # Normalise les données IQ pour éviter le clipping
     max_amplitude = np.max(np.abs(iq_sig))
     if max_amplitude > 0:
@@ -1865,7 +1957,27 @@ def save_as_wav():
     stereo_data = np.column_stack((real_part, imag_part))
     wav.write(filename, s_rate, stereo_data)
     if debug is True:
-        print("Ecriture du nouveau wav")
+        print("Ecriture du nouveau wav stereo : ", filename)
+
+def save_as_mono_wav():
+    global iq_sig, s_rate
+    filename = tk.filedialog.asksaveasfilename(title=lang["save_wav"],
+        defaultextension=".wav",filetypes=[("Waveform Audio File", "*.wav"), ("All Files", "*.*")])
+    # Conversion en mono réel
+    iq_sig, s_rate = sm.upsample(iq_sig, s_rate, 2)
+    t = np.arange(len(iq_sig)) / s_rate
+    reconstructed = iq_sig * np.exp(1j * 2*np.pi*(s_rate//4)*t)
+    mono = np.real(reconstructed)
+    # Normalise
+    max_amplitude = np.max(np.abs(mono))
+    if max_amplitude > 0:
+        mono = mono / max_amplitude
+    # Formate en 16 bits
+    mono_int16 = (mono * 32767).astype(np.int16)
+    # Enregistre en mono
+    wav.write(filename, s_rate, mono_int16)
+    if debug:
+        print(f"Ecriture du nouveau wav mono : {filename}")
 
 # Démodulation FSK(CPM NRZ)/PSK 2 et 4
 def demod_cpm_psk():
@@ -2689,11 +2801,17 @@ def advanced_settings():
     global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
     global scf_alpha_step, costas_damping, costas_bw_factor, eye_channel, eye_num_traces, eye_symbols
     global mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_viterbi_penalty, mfsk_bin_width_cluster_factor, mfsk_hop_factor
-    global alpha_noise
+    global alpha_noise, filter_kind
     # Popup pour les paramètres avancés
     popup = tk.Toplevel()
     popup.title(lang["advanced_settings"])
-    place_relative(popup, root, 600, 800)
+    place_relative(popup, root, 600, 850)
+    # Type de filtre Butterworth, Chebyshev I, Chebyshev II : menu déroulant
+    tk.Label(popup, text=lang["filter_kind"]).pack()
+    filter_kind_var = tk.StringVar(value=filter_kind)
+    filter_options = ["Butterworth", "Chebyshev I", "Chebyshev II"]
+    filter_kind_menu = tk.OptionMenu(popup, filter_kind_var, *filter_options)
+    filter_kind_menu.pack()
     tk.Label(popup, text=lang["filter_order"]).pack()
     filter_order_var = tk.IntVar(value=filter_order) # valeur initiale
     tk.Entry(popup, textvariable=filter_order_var).pack() # ordre du filtre Butterworth
@@ -2759,11 +2877,11 @@ def advanced_settings():
         nonlocal eye_channel_var, eye_num_traces_var, eye_symbols_var
         nonlocal mfsk_tresh_db_var, mfsk_peak_prom_db_var, mfsk_win_factor_var, mfsk_viterbi_penalty_var
         nonlocal mfsk_cluster_bin_width_factor_var, mfsk_hop_factor_var
-        nonlocal alpha_noise_var
+        nonlocal alpha_noise_var, filter_kind_var
         global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
         global scf_alpha_step, costas_damping, costas_bw_factor, eye_channel, eye_num_traces, eye_symbols
         global mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_viterbi_penalty, mfsk_bin_width_cluster_factor, mfsk_hop_factor
-        global alpha_noise
+        global alpha_noise, filter_kind
         filter_order = filter_order_var.get()
         peak_prominence = peak_prominence_var.get()
         acf_min_distance = acf_min_distance_var.get()
@@ -2784,6 +2902,7 @@ def advanced_settings():
         mfsk_bin_width_cluster_factor = mfsk_cluster_bin_width_factor_var.get()
         mfsk_viterbi_penalty = mfsk_viterbi_penalty_var.get()
         alpha_noise = alpha_noise_var.get()
+        filter_kind = filter_kind_var.get()
         if debug is True:
             print(f"Paramètres avancés mis à jour : "
                   f"filter_order={filter_order}, peak_prominence={peak_prominence}, acf_min_distance={acf_min_distance}, "
@@ -2792,7 +2911,7 @@ def advanced_settings():
                   f"eye_channel={eye_channel}, eye_num_traces={eye_num_traces}, eye_symbols={eye_symbols}, "
                   f"mfsk_tresh_db={mfsk_tresh_db}, mfsk_peak_prom_db={mfsk_peak_prom_db}, mfsk_win_factor={mfsk_win_factor}, "
                   f"mfsk_hop_factor={mfsk_hop_factor}, mfsk_bin_width_cluster_factor={mfsk_bin_width_cluster_factor}, "
-                  f"mfsk_viterbi_penalty={mfsk_viterbi_penalty}, alpha_noise={alpha_noise}")
+                  f"mfsk_viterbi_penalty={mfsk_viterbi_penalty}, alpha_noise={alpha_noise}, filter_kind={filter_kind}")
         popup.destroy()
     tk.Button(popup, text="OK", command=save_settings).pack()
 
@@ -2895,7 +3014,10 @@ def load_lang_changes():
     # Lissage
     mod_menu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
     # Enregistrer nouveau wav
-    mod_menu.add_command(label=lang["save_wav"], command=save_as_wav)
+    save_submenu = tk.Menu(mod_menu, tearoff=0)
+    save_submenu.add_command(label="Stereo", command=save_as_wav)
+    save_submenu.add_command(label="Mono", command=save_as_mono_wav) 
+    mod_menu.add_cascade(label=lang["save_wav"], menu=save_submenu)
     # Menu Filtre
     filter_menu.add_command(label=lang["filter_high_low"], command=apply_filter_high_low)
     filter_menu.add_command(label=lang["filter_band"], command=apply_filter_band)
@@ -2912,6 +3034,7 @@ def load_lang_changes():
     power_menu.add_command(label=lang["dsp"], command=dsp)
     power_menu.add_command(label=lang["dsp_max"], command=dsp_max)
     power_menu.add_command(label=lang["time_amp"], command=time_amplitude)
+    power_menu.add_command(label=lang["signal_power"], command=signal_power)
     # Phase
     diff_menu.add_command(label=lang["constellation"], command=constellation)
     diff_menu.add_command(label=lang["distrib_phase"], command=phase_cumulative)
@@ -2929,6 +3052,7 @@ def load_lang_changes():
     speed_menu.add_command(label=lang["pseries"], command=pseries)
     speed_menu.add_command(label=lang["cyclospectrum"], command=cyclospectrum)
     speed_menu.add_command(label=lang["clock_graph"], command=clock_graph)
+    speed_menu.add_command(label=lang["cepstrum"], command=cepstrum)
     # ACF
     acf_menu.add_command(label=lang["autocorr"], command=autocorr)
     acf_menu.add_command(label=lang["autocorr_full"], command=autocorr_full)

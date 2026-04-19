@@ -260,6 +260,12 @@ def get_fra_lib():
         "spectral_denoise": "Débruitage spectral",
         "alpha_noise": "Seuil multiplicatif sur le niveau de bruit pour le débruitage spectral (1.2 par défaut) [float]",
         "filter_legacy": "Filtres classiques",
+        "cepstrum": "Estimateur cepstral",
+        "filter_kind": "Type de filtre pour le filtrage passe-haut/bas et passe-bande",
+        "signal_power": "Signal ^N",
+        "power_order": "Entrez l'ordre de la puissance (par exemple, 2 pour la puissance carrée) :",
+        "residue_peak": "Résidu de porteuse estimé :",
+        "residue_estimate": "Estimation du résidu de porteuse : seulement valide pour les signaux avec une forte composante de porteuse",
 
     }
     return fra_lib
@@ -524,6 +530,12 @@ def get_eng_lib():
         "spectral_denoise": "Spectral Denoising",
         "alpha_noise": "Multiplicative threshold on noise level for spectral denoising (default 1.2) [float]",
         "filter_legacy": "Legacy filters",
+        "cepstrum": "Cepstral estimator",
+        "filter_kind": "Filter type for high/low pass and band pass filtering",
+        "signal_power": "Signal ^N",
+        "power_order": "Enter the power order (e.g. 2 for squared power) :",
+        "residue_peak": "Estimated residual carrier frequency offset :",
+        "residue_estimate": "Carrier frequency offset estimation : only valid for signals with a strong carrier component",
 
     }
     return eng_lib

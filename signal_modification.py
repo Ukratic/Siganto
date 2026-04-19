@@ -1,39 +1,54 @@
 """Fonctions de base pour appliquer un filtre, ré-échantillonner,
 corriger ou simuler un décalage Doppler, etc. sur un signal IQ."""
 
-from scipy.signal import butter, filtfilt, resample, medfilt, wiener, firwin, convolve, resample_poly
+from scipy.signal import butter, filtfilt, resample, medfilt, wiener, firwin, convolve, resample_poly, cheby1, cheby2
 import numpy as np
 
-def bandpass_filter(iq_sig, lowcut, highcut, samp_rate, order=4):
+def bandpass_filter(iq_sig, lowcut, highcut, samp_rate, order=4, filter_type='Butterworth'):
     """Filtre passe-bande, basé sur scipy.signal.butter et filtfilt"""
     nyquist = samp_rate / 2
     low = lowcut / nyquist
     high = highcut / nyquist
-    b, a = butter(order, [low, high], btype='band') # Butterworth
+    if filter_type == 'Butterworth':
+        b, a = butter(order, [low, high], btype='band') # Butterworth
+    elif filter_type == 'Chebyshev I':
+        b, a = cheby1(order, 0.5, [low, high], btype='band') # Chebyshev type I
+    elif filter_type == 'Chebyshev II':
+        b, a = cheby2(order, 20, [low, high], btype='band') # Chebyshev type II
     # application du filtre en avant et en arrière pour éviter la distorsion de phase
     filtered_signal = filtfilt(b, a, iq_sig) 
 
     return filtered_signal
 
-def lowpass_filter(iq_sig, highcut, samp_rate, order=4):
+def lowpass_filter(iq_sig, highcut, samp_rate, order=4, filter_type='Butterworth'):
     """Filtre passe-bas, basé sur scipy.signal.butter et filtfilt"""
     nyquist = samp_rate / 2
     if not 0 < highcut < nyquist:
         raise ValueError("Fréquence de coupure doit être entre 0 et la fréquence de Nyquist.")
     high = highcut / nyquist
-    b, a = butter(order, high, btype='low') # Butterworth
+    if filter_type == 'Butterworth':
+        b, a = butter(order, high, btype='low') # Butterworth
+    elif filter_type == 'Chebyshev I':
+        b, a = cheby1(order, 0.5, high, btype='low') # Chebyshev type I
+    elif filter_type == 'Chebyshev II':
+        b, a = cheby2(order, 20, high, btype='low') # Chebyshev type II
     # application du filtre en avant et en arrière pour éviter la distorsion de phase
     filtered_signal = filtfilt(b, a, iq_sig) 
 
     return filtered_signal
 
-def highpass_filter(iq_sig, lowcut, samp_rate, order=4):
+def highpass_filter(iq_sig, lowcut, samp_rate, order=4, filter_type='Butterworth'):
     """Filtre passe-haut, basé sur scipy.signal.butter et filtfilt"""
     nyquist = samp_rate / 2
     if not 0 < lowcut < nyquist:
         raise ValueError("Fréquence de coupure doit être entre 0 et la fréquence de Nyquist.")
     low = lowcut / nyquist
-    b, a = butter(order, low, btype='high') # Butterworth
+    if filter_type == 'Butterworth':
+        b, a = butter(order, low, btype='high') # Butterworth
+    elif filter_type == 'Chebyshev I':
+        b, a = cheby1(order, 0.5, low, btype='high') # Chebyshev type I
+    elif filter_type == 'Chebyshev II':
+        b, a = cheby2(order, 20, low, btype='high') # Chebyshev type II
     # application du filtre en avant et en arrière pour éviter la distorsion de phase
     filtered_signal = filtfilt(b, a, iq_sig) 
     return filtered_signal

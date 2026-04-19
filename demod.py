@@ -734,3 +734,23 @@ def estimate_timing_phase(signal, sps, zero=0):
     offset = np.arctan2(sum_sin, sum_cos)
     offset *= sps / (2.0 * np.pi) # conversion en échantillons
     return offset
+
+
+def gardner_timing(samples, sps):
+    out = []
+    mu = 0  # accumulateur de timing
+    i = 0
+
+    while i < len(samples) - sps:
+        s0 = samples[int(i + mu)] # échantillon actuel
+        s1 = samples[int(i + mu + sps/2)] # échantillon au milieu du symbole
+        s2 = samples[int(i + mu + sps)] # échantillon du symbole suivant
+
+        error = np.real((s0 - s2) * np.conj(s1)) # produit d'erreur de timing
+
+        mu += 0.01 * error  # gain
+        i += sps # symbole suivant
+
+        out.append(s0)
+
+    return np.array(out)

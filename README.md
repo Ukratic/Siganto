@@ -12,9 +12,11 @@ Be aware that the entire file is displayed, not looped over in chunks as many ot
 
 ### Available functions
 #### 1. Display & Settings
+*Includes buttons on the bottom part of the window & options in the top dropdown menu.*<br>
 - Load a .wav file. The button reloads the same file if clicked again. Select the button next to it to close the .wav file before loading another.<br>
-Spectrogram & PSD shown when a file is loaded. With the V1.09 dependency, loading a wav file can be done by drag & drop.
-- Activate measuring cursors (deactivated by default upon loading a new graph). Distance between 2 cursors is shown and you can also jump to a nearby peak (button in bottom right).
+Spectrogram & PSD shown when a file is loaded. With the added dependency of the tkinterdnd2 library, loading a wav file can be done by drag & drop.
+- Activate measuring cursors (deactivated by default upon loading a new graph). Distance between 2 cursors is shown when a second one is placed.
+- Jump to nearest peak (from the latest cursor positioned on the graph).
 - Change language (English and French available)
 - Display frequency & power information of the signal file (Estimated BW, dB level, symbol rate & ACF)
 - Advanced Settings : Modify parameters not directly available on each graph/function.
@@ -29,9 +31,10 @@ Overlap.
 - Polyphase resampling (target sample rate)
 - Cut part of the signal in time (enter a value or by cursor selection ; the latter only works reliably on spectrogram)
 - Modify parameters for transition smoothing (phase, frequency) & persistence bins
-- Save as a new .wav file
+- Save as a new .wav file (mono or stereo)
 #### 3. Filters
 - Low/High/Band Pass
+- Spectral denoising
 - FIR, Wiener, Median, Moving average, Mean
 - Matched Filter : Gaussian, Raised Cosine, Root Raised Cosine, Sinc, Rsinc, Rectangular
 #### 4. Spectrograms
@@ -60,17 +63,19 @@ Overlap.
 - Power Order (2 & 4) Spectrum
 - Cyclospectrum
 - Clock Frequency Detection
+- Cepstral Estimator
 #### 9. Cyclostationarity Metrics
 - Autocorrelation function (FFT-based fast variant or complete)
 - Spectral Correlation function
 #### 10. OFDM Metrics
-- Estimation of : OFDM symbol duration, guard interval, subcarrier spacing
+- Estimation of : OFDM symbol duration, guard interval, subcarrier spacing.<br>
+The first step relies on the autocorrelation function.
 #### 11. Demodulation
 - 2 or 4 CPM/FSK & PSK Demodulation (with optional baud rate estimation)
 - AM, FM & SSB Demodulation (visual output and result signal saved for audio playback, further analysis or demodulation)
 - MFSK Demodulation (2 methods : tone detection or from smoothed frequency transitions)
 #### 12. Audio
-- Audio playback (first pick the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded)
+- Audio playback (first pick the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded). Requires the sounddevice library.
 
 ### Changelog :
 - *V1.10* :<br>
@@ -88,6 +93,13 @@ Overlap.
 -- In additional options : Constellation Rotation Correction. Requires prior frequency offset correction.<br>
 -- Added a spectral denoising filter. Moving average & median filter moved to legacy filtering options.<br>
 -- Added a cursor coordinates window in display settings. Captures cursor markers in a copyable list.<br>
+
+- *V1.10g* :<br>
+-- New baud rate seeking function : Cepstral estimator. Based on Cepstrum and re-mapped to frequency.<br>
+-- Available in advanced parameters : switch high/low pass & bandpass to Chebyshev I or II (default still Butterworth).<br>
+-- The (modified or not) signal can now be saved as mono real (previously only stereo IQ).<br>
+-- Constellation is now a density plot, improving over simple scatter in noisy conditions.<br>
+-- Added a graph of the signal at the Nth power for carrier frequency offset correction with PSK/QAM signals.<br>
 
 ### Using the app
 1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>
