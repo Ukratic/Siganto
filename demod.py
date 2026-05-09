@@ -275,13 +275,14 @@ def cluster_freqs(freqs, weights=None, merge_hz=0.0):
 # Méthode à évaluer sur plusieurs types de MFSK (diffs d'espacement, nb de tons, SNR, dérive frq...)
 def detect_and_track_mfsk_auto(
     iq, fs, baud,
-    num_tones=None,              # keep top-N tones after clustering (None=all)
-    peak_thresh_db=8,            # per-frame relative threshold
-    peak_prominence=None,        # optional: e.g. 3 (dB) : converted internally
-    win_factor=1.0,              # window length : win_factor * (fs/baud)
-    hop_factor=0.25,             # hop : hop_factor * window
-    merge_bins=1.2,              # cluster width in bins for tone dedup
-    switch_penalty=0.05          # Viterbi penalty (linear power units)
+    num_tones=None, # keep top-N tones after clustering (None=all)
+    peak_thresh_db=8,   # per-frame relative threshold
+    peak_prominence=None,   # optional: e.g. 3 (dB) : converted internally
+    win_factor=1.0, # window length : win_factor * (fs/baud)
+    hop_factor=0.25,    # hop : hop_factor * window
+    merge_bins=1.2, # cluster width in bins for tone dedup
+    switch_penalty=0.05,    # Viterbi penalty for switching tones (relative to tone power)
+    manual_freqs=None   # optional list of frequencies to track (overrides auto-detection)
 ):
     """
     Auto-detect baseband MFSK tones (±freq) and track them over time.
@@ -333,7 +334,11 @@ def detect_and_track_mfsk_auto(
 
     # Cluster close frequencies so each tone appears once
     merge_hz = max(df * merge_bins, 0.5)  # at least 0.5 Hz to avoid crazy fragmentation
-    tones_all = cluster_freqs(obs_freqs, weights=obs_w, merge_hz=merge_hz)
+    if manual_freqs is not None:
+        # Override auto-detection with manual frequencies (if provided)
+        tones_all = np.array(manual_freqs, float)
+    else:
+        tones_all = cluster_freqs(obs_freqs, weights=obs_w, merge_hz=merge_hz)
     if num_tones is not None and len(tones_all) > num_tones:
         tones_all = tones_all[:num_tones]
     tone_freqs = np.sort(tones_all)

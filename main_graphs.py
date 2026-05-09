@@ -24,10 +24,13 @@ def compute_spectrogram(iq_sig, samp_rate, N, window_func='hann'):
     return freqs, times, spectrogram
 
 # STFT
-def compute_stft(iq_sig, samp_rate, window_size, overlap, window_func='hann'):
+def compute_stft(iq_sig, samp_rate, window_size, overlap, window_func='hann', nfft=None,step_size=None):
     """Spectrogramme via STFT (Short-Time Fourier Transform) avec recouvrement"""
     # Steps
-    step_size = window_size - overlap
+    if step_size is None:
+        step_size = (window_size - overlap)// 2
+    if nfft is None:
+        nfft = window_size * 4
     num_windows = (len(iq_sig) - overlap) // step_size
     # Choix de fenetre
     window = df.get_window(window_func, window_size)
@@ -43,7 +46,7 @@ def compute_stft(iq_sig, samp_rate, window_size, overlap, window_func='hann'):
             segment = np.pad(segment, (0, window_size - len(segment)))
         segment = segment * window
         # Compute FFT
-        fft_segment = np.fft.fft(segment)
+        fft_segment = np.fft.fft(segment, n=nfft)
         stft_matrix.append(fft_segment)
         times.append(start / samp_rate)
 
@@ -54,14 +57,18 @@ def compute_stft(iq_sig, samp_rate, window_size, overlap, window_func='hann'):
     except:
         freqs = None
 
-    return freqs, np.array(times), 20 * np.log10(np.abs(stft_matrix)) # Magnitude en dB
+    return freqs, np.array(times), 20 * np.log10(np.abs(stft_matrix)+ 1e-12) # Magnitude en dB
 
 # DSP
-def compute_dsp(iq_sig, samp_rate, N=256, overlap=128, window_type='hann'):
+def compute_dsp(iq_sig, samp_rate, N=256, overlap=128, window_type='hann', nfft=None, step_size=None):
     """Densité spectrale de puissance (PSD) via méthode moyenne périodogramme (Welch)"""
+    if step_size is None:
+        step_size = (N - overlap)// 2
+    if nfft is None:
+        nfft = N * 4
     step_size = N - overlap  # match STFT
     num_windows = (len(iq_sig) - overlap) // step_size
-    psd_sum = np.zeros(N)
+    psd_sum = np.zeros(nfft)
     window = df.get_window(window_type, N)
     # Loop fenêtres
     for i in range(num_windows):
@@ -70,13 +77,13 @@ def compute_dsp(iq_sig, samp_rate, N=256, overlap=128, window_type='hann'):
         segment = iq_sig[start:end]
         segment = segment * window
         # Compute FFT**2
-        fft_result = np.fft.fft(segment, N)
+        fft_result = np.fft.fft(segment, n=nfft)
         psd_sum += np.abs(fft_result) ** 2
     # Avg puissance sur les fenêtres
     psd = psd_sum / num_windows
     psd /= samp_rate
     # Freq bins
-    freqs = np.fft.fftfreq(N, d=1/samp_rate)
+    freqs = np.fft.fftfreq(nfft, d=1/samp_rate)
     psd /= np.sum(window**2)  # Correction fenêtrage
 
     return freqs, psd

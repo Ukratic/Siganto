@@ -266,6 +266,13 @@ def get_fra_lib():
         "power_order": "Entrez l'ordre de la puissance (par exemple, 2 pour la puissance carrée) :",
         "residue_peak": "Résidu de porteuse estimé :",
         "residue_estimate": "Estimation du résidu de porteuse : seulement valide pour les signaux avec une forte composante de porteuse",
+        "auto_detect": "Détection automatique",
+        "manual_select": "Sélection manuelle",
+        "enter_freq_tones": "Entrez les fréquences des tons séparées par des virgules (Hz) :",
+        "time_resol": "Résolution temporelle: ",
+        "time_step_val": "Entrez la nouvelle valeur de temps entre les fenêtres FFT en nombres d'échantillons (par défaut N - recouvrement) :",
+        "time_step_valid": "Entrez une valeur de temps entre les fenêtres FFT valide (entier positif) :",
+        "set_time_step": "Définir le temps entre les fenêtres FFT",
 
     }
     return fra_lib
@@ -536,6 +543,13 @@ def get_eng_lib():
         "power_order": "Enter the power order (e.g. 2 for squared power) :",
         "residue_peak": "Estimated residual carrier frequency offset :",
         "residue_estimate": "Carrier frequency offset estimation : only valid for signals with a strong carrier component",
+        "auto_detect": "Automatic detection",
+        "manual_select": "Manual selection",
+        "enter_freq_tones": "Enter the frequencies of the tones separated by commas (Hz) :",
+        "time_resol": "Time resolution: ",
+        "time_step_val": "Enter the new time step value between FFT windows in number of samples (default N - overlap) :",
+        "time_step_valid": "Enter a valid time step value between FFT windows (positive integer) :",
+        "set_time_step": "Set time step between FFT windows",
 
     }
     return eng_lib

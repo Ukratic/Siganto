@@ -18,7 +18,7 @@ Spectrogram & PSD shown when a file is loaded. With the added dependency of the 
 - Activate measuring cursors (deactivated by default upon loading a new graph). Distance between 2 cursors is shown when a second one is placed.
 - Jump to nearest peak (from the latest cursor positioned on the graph).
 - Change language (English and French available)
-- Display frequency & power information of the signal file (Estimated BW, dB level, symbol rate & ACF)
+- Display frequency & power information of the signal file (Estimated BW, dB level, estimated symbol rate & ACF)
 - Advanced Settings : Modify parameters not directly available on each graph/function.
 #### 2. Signal modification
 - Change FFT parameters :<br>
@@ -35,7 +35,7 @@ Overlap.
 #### 3. Filters
 - Low/High/Band Pass
 - Spectral denoising
-- FIR, Wiener, Median, Moving average, Mean
+- FIR, Wiener, Median, Moving average
 - Matched Filter : Gaussian, Raised Cosine, Root Raised Cosine, Sinc, Rsinc, Rectangular
 #### 4. Spectrograms
 - Group : Spectrogram & DSP
@@ -81,25 +81,23 @@ The first step relies on the autocorrelation function.
 - *V1.10* :<br>
 -- Fixed power scaling on various graphs. Normalized when exact values are not relevant.<br>
 -- Added polyphase resampling.<br>
--- Added another Envelope Spectrum & renamed some symbol rate graphs with a (hopefully) clearer title.<br>
+-- Renamed some symbol rate graphs with a (hopefully) clearer title.<br>
 -- Automatic symbol rate estimation now has a confidence level.<br>
 
-- *V1.10b-d* :<br>
--- Almost all parameters now accessible (options tab), no longer hardcoded.<br>
+- *since v1.10a* :<br>
+-- Almost all parameters now accessible (options tab) & no longer hardcoded.<br>
 -- SSB demod.<br>
-
-- *V1.10e-f* :<br>
 -- Added a graph for the (already used in baud rate estimation before demod) Clock Frequency Detection.<br>
 -- In additional options : Constellation Rotation Correction. Requires prior frequency offset correction.<br>
 -- Added a spectral denoising filter. Moving average & median filter moved to legacy filtering options.<br>
 -- Added a cursor coordinates window in display settings. Captures cursor markers in a copyable list.<br>
-
-- *V1.10g* :<br>
--- New baud rate seeking function : Cepstral estimator. Based on Cepstrum and re-mapped to frequency.<br>
--- Available in advanced parameters : switch high/low pass & bandpass to Chebyshev I or II (default still Butterworth).<br>
+-- New experimental baud rate seeking function : Cepstral estimator. Based on Cepstrum and re-mapped to frequency.<br>
+-- Available in advanced parameters : switch high/low pass & bandpass to Chebyshev I or II (default is still Butterworth).<br>
 -- The (modified or not) signal can now be saved as mono real (previously only stereo IQ).<br>
 -- Constellation is now a density plot, improving over simple scatter in noisy conditions.<br>
 -- Added a graph of the signal at the Nth power for carrier frequency offset correction with PSK/QAM signals.<br>
+-- MFSK demodulation can be executed on specified frequencies instead of relying on detection.<br>
+-- Improved time resolution on spectrogram.<br>
 
 ### Using the app
 1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>

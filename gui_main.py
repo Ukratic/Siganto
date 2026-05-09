@@ -1,7 +1,7 @@
 """
 SigAnTo - Signal Analysis Toolbox - GUI
 Author: Arnaud Barraquand (@Ukratic)
-Date: 2024-11-21 -> 2026-03-15
+Date: 2024-11-21 -> 2026-05-09
 
 A GUI for signal analysis using Python. 
 4 main libraries used : tkinter, matplotlib, numpy & scipy.
@@ -107,6 +107,7 @@ convert_button = False
 N = 512 # taille de la fenêtre FFT par défaut
 overlap_value = 4 # valeur de recouvrement par défaut
 overlap = N//overlap_value # recouvrement de la STFT
+time_step = (N - overlap) // 2 # temps entre fenêtres FFT
 toolbar = None # toolbar matplotlib
 diff_window = 0 # fenêtre de lissage des transitions
 hist_bins = 1000 # bins pour les histogrammes
@@ -190,7 +191,7 @@ def find_sample_width(file_path):
 def load_wav():
     """Charge un fichier WAV, convertit en I/Q,
     et affiche les graphes initiaux."""
-    global filepath, s_rate, iq_sig, N, overlap, corr, convert_button
+    global filepath, s_rate, iq_sig, N, overlap, corr, convert_button, time_step
     if filepath is None:
         filepath = tk.filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
     if not filepath:
@@ -253,6 +254,7 @@ def load_wav():
     else:
         N = 512 # taille de fenêtre FFT par défaut
     overlap = N//overlap_value
+    time_step = (N - overlap) // 2
 
     display_file_info()
     # Plot graphes initiaux après chargement du fichier
@@ -325,7 +327,7 @@ def plot_initial_graphs():
     if not filepath:
         print(lang["no_file"])
         return
-    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice, nfft=N*4, step_size=time_step)
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
@@ -362,7 +364,7 @@ def plot_initial_graphs():
 
 # Fonc pour changer la taille de fenêtre FFT
 def define_N():
-    global N, overlap_value, overlap
+    global N, overlap_value, overlap, time_step
     N = int(tk.simpledialog.askstring("N", lang["define_n"], parent=root))
     if N is None:
         if debug is True:
@@ -370,6 +372,7 @@ def define_N():
         return
     N = (int(N/2))*2 # N doit être pair
     overlap = N//overlap_value
+    time_step = (N - overlap) // 2
     print(lang["fft_window"], N)
     plot_initial_graphs()
     display_file_info()
@@ -394,7 +397,7 @@ def plot_other_graphs():
         print(lang["no_file"])
         return
     # STFT
-    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice, nfft=N*4, step_size=time_step)
     stft = ax[0].imshow(stft_matrix, aspect='auto', extent=[s_rate / -2, s_rate / 2, len(iq_sig) / s_rate, 0], cmap=cm.jet)
     ax[0].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
@@ -435,7 +438,7 @@ def plot_other_graphs():
         # Màj label
         freq_label.config(text=f"{lang['offset_freq']}: {fcenter} Hz")
         # Màj STFT
-        freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice)
+        freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice, nfft=N*4, step_size=time_step)
         stft.set_data(stft_matrix)
         # Màj constellation
         iq_constel = iq_sig/np.max(np.abs(iq_sig))
@@ -622,7 +625,7 @@ def set_hist_bins():
     frequency_cumulative()
 
 def set_overlap():
-    global overlap, overlap_value
+    global overlap, overlap_value, time_step
     enter_overlap = tk.simpledialog.askstring(lang["params"], lang["overlap_val"], parent=root)
     if enter_overlap is None or enter_overlap == "" or int(enter_overlap) < 2:
         tk.messagebox.showinfo(lang["error"], lang["overlap_valid"], parent=root)
@@ -632,8 +635,25 @@ def set_overlap():
         return
     overlap_value = int(enter_overlap)
     overlap = N//overlap_value
+    time_step = (N - overlap) // 2
     if debug is True:
         print("Recouvrement défini à ", overlap)
+        print("Temps entre fenêtres FFT défini à ", time_step)
+    display_file_info()
+    plot_initial_graphs()
+
+def set_time_step():
+    global time_step, overlap
+    enter_time_step = tk.simpledialog.askstring(lang["params"], lang["time_step_val"], parent=root)
+    if enter_time_step is None or enter_time_step == "" or int(enter_time_step) < 1:
+        tk.messagebox.showinfo(lang["error"], lang["time_step_valid"], parent=root)
+        time_step = (N - overlap) // 2
+        if debug is True:
+            print("Pas de temps entre fenêtres FFT valable défini pour la STFT. Temps par défaut à ", time_step)
+        return
+    time_step = int(enter_time_step)
+    if debug is True:
+        print("Temps entre fenêtres FFT défini à ", time_step)
     display_file_info()
     plot_initial_graphs()
 
@@ -649,7 +669,7 @@ def stft_solo():
         return
 
     ax = plt.subplot()
-    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice)
+    freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice, nfft=N*4, step_size=time_step)
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
@@ -679,7 +699,7 @@ def display_frq_info():
     f = np.linspace(s_rate/-2, s_rate/2, len(iq_sig))
     f_pmax = f[np.argmax(wav_mag)]
     f_pmin = f[np.argmin(wav_mag)]
-    _, psd = mg.compute_dsp(iq_sig, s_rate, N, overlap, window_choice)
+    _, psd = mg.compute_dsp(iq_sig, s_rate, N, overlap, window_choice, nfft=N*4, step_size=time_step)
     max_lvl = 10*np.log10(np.max(psd))
     low_lvl = 10*np.log10(np.min(psd))
     mean_lvl = 10*np.log10(np.mean(psd))
@@ -768,7 +788,7 @@ def display_file_info():
         return
     info_label.config(text=f"{filepath}. {lang['encoding']} {find_sample_width(filepath)[0]} bits. Format {find_sample_width(filepath)[1]}. \
                       \n{lang['samples']} {len(iq_sig)}. {lang['sampling_frq']} {s_rate} Hz. {lang['duree']}: {len(iq_sig)/s_rate:.2f} sec.\
-                      \n {lang['fft_window']} {N}. Overlap : {overlap}. {lang['f_resol']} {s_rate/N:.2f} Hz.")
+                      \n {lang['fft_window']} {N}. Overlap : {overlap}. {lang['f_resol']} {s_rate/N:.2f} Hz. {lang['time_resol']} {time_step/s_rate*1000:.2f} ms.")
     if debug is True:
         print("Affichage des informations du fichier")
         print("Chargé: ", filepath)
@@ -779,6 +799,8 @@ def display_file_info():
         print("Durée: ", len(iq_sig)/s_rate, " secondes")
         print("Taille fenêtre FFT: ", N)
         print("Recouvrement: ", overlap)
+        print("Résolution en fréquence: ", s_rate/N, " Hz")
+        print("Résolution en temps: ", time_step/s_rate*1000, " ms")
 
 ## Fonctions de traitement du signal (filtres, déplacement de fréquence,
 # sous-échantillonnage, sur-échantillonnage, coupure)
@@ -2258,9 +2280,8 @@ def demod_mfsk():
     # on demande rapidité, ordre, espacement et mapping
     popup = tk.Toplevel()
     popup.bind("<Return>", lambda event: popup.destroy())
-    place_relative(popup, root, 500, 250)
+    place_relative(popup, root, 500, 275)
     popup.title(lang["demod_param"])
-    # popup.geometry("350x250")
     param_method = tk.StringVar()
     tk.Radiobutton(popup, text=lang["mfsk_discrete_diff"], variable=param_method, value="main").pack()
     tk.Radiobutton(popup, text=lang["mfsk_tone_detection"], variable=param_method, value="alt").pack()
@@ -2280,7 +2301,20 @@ def demod_mfsk():
     mapping_custom = tk.Radiobutton(popup, text=lang["mapping_non-binary"], variable=param_mapping, value=lang["mapping_non-binary"])
     mapping_custom.pack()
     param_mapping.set(lang["mapping_nat"])
+    freq_tones = tk.StringVar()
+    options_tones = [lang["auto_detect"], lang["manual_select"]]
+    options_tones_menu = tk.OptionMenu(popup, freq_tones, *options_tones)
+    freq_tones.set(lang["auto_detect"])
+    options_tones_menu.pack()
     tk.Button(popup, text="OK", command=popup.destroy).pack()
+
+    def toggle_tone_selection():
+        # tone detection seulement si méthode alternative sélectionnée
+        if param_method.get() == "alt":
+            options_tones_menu.config(state=tk.NORMAL)
+        else:            
+            options_tones_menu.config(state=tk.DISABLED)
+    param_method.trace_add("write", lambda *args: toggle_tone_selection())
 
     popup.wait_window()
     if target_rate.get() == "":
@@ -2310,9 +2344,31 @@ def demod_mfsk():
         if param_method.get() == "main":
             symbols, clock = dm.wpcr(freq_diff, s_rate, clock, tau, precision, debug)
         elif param_method.get() == "alt":
+            # si auto_detect, on laisse la fonction trouver les fréquences de tons automatiquement. 
+            # Sinon, saisie utilisateur et passe à la fonction de détection de tons pour se concentrer sur ces fréquences spécifiques.
+            if freq_tones.get() == lang["manual_select"]:
+                # on demande à l'utilisateur de saisir les fréquences de tons séparées par des virgules
+                popup_manual_freqs = tk.Toplevel(root)
+                popup_manual_freqs.bind("<Return>", lambda event: popup_manual_freqs.destroy())
+                place_relative(popup_manual_freqs, root, 500, 100)
+                popup_manual_freqs.title(lang["manual_select"])
+                tk.Label(popup_manual_freqs, text=lang["enter_freq_tones"]).pack()
+                manual_freqs_var = tk.StringVar()
+                tk.Entry(popup_manual_freqs, textvariable=manual_freqs_var, width=75).pack()
+                tk.Button(popup_manual_freqs, text="OK", command=popup_manual_freqs.destroy).pack()
+                popup_manual_freqs.wait_window()
+                manual_freqs = manual_freqs_var.get()
+                try:
+                    tone_freqs_manual = np.array([float(f.strip()) for f in manual_freqs.split(",")])
+                except:
+                    if debug is True:
+                        print("Fréquences de tons manuelles invalides. Revenir à la détection automatique.")
+                    tone_freqs_manual = None
+            else:                
+                tone_freqs_manual = None
         # Détection de tons par clustering pour MFSK, 
         # plus robuste que la méthode discrète sur le signal différentiel
-            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_sig, s_rate, clock, order, mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_hop_factor, mfsk_bin_width_cluster_factor, mfsk_viterbi_penalty)     
+            tone_freqs, t, tone_idx, tone_freq, tone_powers, clock = dm.detect_and_track_mfsk_auto(iq_sig, s_rate, clock, order, mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_hop_factor, mfsk_bin_width_cluster_factor, mfsk_viterbi_penalty, tone_freqs_manual)     
             tone_freq /= np.max(np.abs(tone_freq))
             if debug is True:
                 print(f"Fréquences de tons MFSK détectées : {tone_freqs}")
@@ -2379,7 +2435,8 @@ def demod_mfsk():
         if param_method.get() == "main":
             text_output = f"MFSK{order}. {lang['clock_frequency']} {clock} Hz, {mapping} mapping. {lang['estim_bits']} : {len(bits)}. \n"
         elif param_method.get() == "alt":
-            text_output= f"MFSK{order} {clock} bauds, {mapping} mapping. {lang['estim_bits']} : {len(bits)}. \n"
+            tone_freqs_display = [f"{f:.2f}Hz" for f in tone_freqs]
+            text_output= f"MFSK{order} {clock} bauds, {mapping} mapping. {lang['estim_bits']} : {len(bits)}. {lang['mfsk_tones_detected']} {', '.join(map(str, tone_freqs_display))}.\n"
         # lignes de bits
         if return_format == "int":
             # si format int (actuellement non utilisé), on sépare par une virgule chaque symbole
@@ -2661,9 +2718,8 @@ def eye_diagram():
         ax.grid(True, alpha=0.25)
         # annotation des métriques
         textstr = (
-            f"{lang['eye_height']} : {metrics['eye_height']}\n"
-            f"{lang['eye_width']} : {metrics['eye_width']} {lang['bits_value']}\n"
-            f"{lang['eye_opening_ratio']} : {metrics['eye_opening_ratio']}"
+            f"{lang['eye_height']} : {metrics['eye_height']:.2f}\n"
+            f"{lang['eye_opening_ratio']} : {metrics['eye_opening_ratio']:.2f}"
         )
         fig.text(0.02, 0.02, textstr, ha="left", va="bottom", fontsize=9, bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
     except Exception as e:
@@ -3006,13 +3062,14 @@ def load_lang_changes():
     window_submenu.add_command(label=lang["fft_size"], command=define_N)
     window_submenu.add_command(label=lang["set_window"], command=set_window)
     window_submenu.add_command(label=lang["set_overlap"], command=set_overlap)
+    window_submenu.add_command(label=lang["set_time_step"], command=set_time_step)
     mod_menu.add_cascade(label=lang["window_options"], menu=window_submenu)
     # autres modifs en vrac
     adds_submenu = tk.Menu(mod_menu,tearoff=0)
+    # Lissage
+    adds_submenu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
     adds_submenu.add_command(label=lang["rotation_correction"], command=correct_constellation_rotation)
     mod_menu.add_cascade(label=lang["adds_options"], menu=adds_submenu)
-    # Lissage
-    mod_menu.add_command(label=lang["param_phase_freq"], command=set_diff_params)
     # Enregistrer nouveau wav
     save_submenu = tk.Menu(mod_menu, tearoff=0)
     save_submenu.add_command(label="Stereo", command=save_as_wav)
