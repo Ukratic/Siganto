@@ -29,7 +29,7 @@ Overlap.
 - Coarse doppler correction (essentially a diagonal frequency shift)
 - Down or Up Sampling (by ratio of an integer >1)
 - Polyphase resampling (target sample rate)
-- Cut part of the signal in time (enter a value or by cursor selection ; the latter only works reliably on spectrogram)
+- Cut part of the signal in time alone or time & frequency (enter a value or by cursor selection ; the latter only works reliably on spectrogram)
 - Modify parameters for transition smoothing (phase, frequency) & persistence bins
 - Save as a new .wav file (mono or stereo)
 #### 3. Filters
@@ -98,6 +98,7 @@ The first step relies on the autocorrelation function.
 -- Added a graph of the signal at the Nth power for carrier frequency offset correction with PSK/QAM signals.<br>
 -- MFSK demodulation can be executed on specified frequencies instead of relying on detection.<br>
 -- Improved time resolution on spectrogram.<br>
+-- Added a modify-cut option in time & frequency to select a part of the signal with cursors.<br>
 
 ### Using the app
 1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>

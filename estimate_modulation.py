@@ -48,7 +48,6 @@ def envelope_spectrum(iq_sig, samp_rate):
 
     return env_power, env_freqs, peak_freq
 
-
 def mean_threshold_spectrum(iq_sig, samp_rate):
     """Détection de la rapidité de modulation basée sur le seuillage moyen"""
     # seuil de la moyenne et calcul des pulses pour la détection de la fréquence de modulation
@@ -98,6 +97,24 @@ def power_series(iq_sig, samp_rate):
 
     return f, squared_metric, quartic_metric, peak_squared_freq, peak_quartic_freq
 
+def power_signal(iq_sig, samp_rate, power=2):
+    """Signal à la puissance demandée pour corriger la fréquence centrale
+    avec le résidu de porteuse"""
+    f = np.linspace(samp_rate/-2, samp_rate/2, len(iq_sig))
+    # puissance du signal à la puissance N
+    # prevenir les overflow en normalisant avant de prendre la puissance
+    norm_sig = iq_sig / np.max(np.abs(iq_sig))
+    samples_power = norm_sig**power
+    powered_sig = np.abs(np.fft.fftshift(np.fft.fft(samples_power)))/len(iq_sig)
+    # chercher le pic de fréquence dans le signal à la puissance N pour estimer la fréquence centrale résiduelle
+    peak_freq_index = np.argmax(powered_sig)
+    peak_freq = f[peak_freq_index]
+    # offset de la fréquence centrale résiduelle en prenant en compte la puissance N : si power=2, la fréquence résiduelle est à 2*peak_freq, etc.
+    if power > 1:
+        peak_freq = peak_freq / power
+    
+    return f, powered_sig, peak_freq
+
 # Cyclospectre
 def cyclic_spectrum_fft(iq_sig):
     """Cyclospectre FFT. Retourne la magnitude du cyclospectre pour une 
@@ -143,7 +160,9 @@ def cyclic_spectrum_sliding_fft(iq_sig, samp_rate, window, frame_len=512, step=2
 
     return freqs_list, cyclic_corr_avg, peak_freq
 
+# Experimental : Estimateur utilisant le cepstre
 def cepstral_estimator(iq_sig, sample_rate, window='hann', fmin=None, fmax=None):
+    """Estimation de la rapidité de modulation basée sur le cepstre de la puissance du signal."""
     x = np.abs(iq_sig)**2
     x = x - np.mean(x)
     N = len(x)
@@ -417,21 +436,3 @@ def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
     N = N - 1
 
     return Tu, Tg, Ts, Df, N
-
-def power_signal(iq_sig, samp_rate, power=2):
-    """Signal à la puissance demandée pour corriger la fréquence centrale
-    avec le résidu de porteuse"""
-    f = np.linspace(samp_rate/-2, samp_rate/2, len(iq_sig))
-    # puissance du signal à la puissance N
-    # prevenir les overflow en normalisant avant de prendre la puissance
-    norm_sig = iq_sig / np.max(np.abs(iq_sig))
-    samples_power = norm_sig**power
-    powered_sig = np.abs(np.fft.fftshift(np.fft.fft(samples_power)))/len(iq_sig)
-    # chercher le pic de fréquence dans le signal à la puissance N pour estimer la fréquence centrale résiduelle
-    peak_freq_index = np.argmax(powered_sig)
-    peak_freq = f[peak_freq_index]
-    # offset de la fréquence centrale résiduelle en prenant en compte la puissance N : si power=2, la fréquence résiduelle est à 2*peak_freq, etc.
-    if power > 1:
-        peak_freq = peak_freq / power
-    
-    return f, powered_sig, peak_freq

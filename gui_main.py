@@ -149,6 +149,7 @@ mfsk_hop_factor = 0.25  # facteur de saut par défaut pour MFSK
 mfsk_bin_width_cluster_factor = 1.2 # facteur de largeur de bin par défaut pour MFSK
 mfsk_viterbi_penalty = 0.05  # pénalité Viterbi par défaut pour MFSK
 alpha_noise = 1.2 # facteur de seuil pour le débruitage spectral, à ajuster selon les besoins
+constel_hexbins = True # pour forcer la constellation en scatter plot indépendamment du nombre de points
 
 # Frame pour les graphes
 plot_frame = tk.Frame(root)
@@ -262,9 +263,9 @@ def load_wav():
 
 def on_file_drop(event):
     global filepath
-    files = root.tk.splitlist(event.data)  # handles spaces in file names
+    files = root.tk.splitlist(event.data)  # gère les chemins avec espaces
     if files:
-        filepath = files[0]  # take first dropped file
+        filepath = files[0]  # prends le premier fichier si plusieurs sont déposés
         load_wav()
 
 def load_real():
@@ -410,7 +411,7 @@ def plot_other_graphs():
     else:
         grid_size = 200
     # si il n'y a pas assez de points, on affiche un scatter plot classique
-    if len(iq_constel) > 400:
+    if constel_hexbins is True:
         line_constellation = ax[1].hexbin(np.real(iq_constel), np.imag(iq_constel), gridsize=grid_size, cmap='jet', bins='log', mincnt=1)
     else:
         line_constellation = ax[1].scatter(np.real(iq_constel), np.imag(iq_constel), s=5)
@@ -843,9 +844,12 @@ def apply_filter_high_low():
     cutoff = tk.StringVar()
     tk.Label(popup, text=lang["freq_pass"]).pack()
     tk.Entry(popup, textvariable=cutoff).pack()
+    # si un curseur est actif, pré-remplit la fréquence de coupure avec la valeur du curseur
+    if len(cursor_points) == 1 or (len(cursor_points) == 2 and cursor_points[0][0] == cursor_points[1][0]):
+        cutoff.set(str(abs(round(cursor_points[0][0],3))))
     tk.Button(popup, text="OK", command=popup.destroy).pack()
     popup.wait_window()
-    if cutoff.get() == "":
+    if cutoff.get() == "" or float(cutoff.get()) <= 0 or float(cutoff.get()) >= s_rate/2:
         if debug is True:
             print("Filtre passe-", filter_type.get(), " non appliqué. Fréquence de coupure non définie")
         return
@@ -915,7 +919,11 @@ def upsample_signal():
 def polyphase_resample():
     # rééchantillonnage par méthode polyphasée
     global iq_sig, s_rate
-    new_fs = tk.simpledialog.askstring(lang["resample_poly"], lang["resample_value"], parent=root)
+    if len(cursor_points) == 1 or (len(cursor_points) == 2 and cursor_points[0][0] == cursor_points[1][0]):
+        init_value_poly = int(abs(cursor_points[0][0])*2) # pré-remplit la fréquence de rééchantillonnage avec la valeur du curseur
+    else:        
+        init_value_poly = ""
+    new_fs = tk.simpledialog.askstring(lang["resample_poly"], lang["resample_value"], parent=root, initialvalue=init_value_poly)
     if new_fs is None:
         if debug is True:
             print("Taux de rééchantillonnage non défini")
@@ -1365,8 +1373,8 @@ def constellation():
         grid_size = int(np.sqrt(len(iq_constel) // 2))  # Ajuster la taille de la grille en fonction du nombre de points
     else:
         grid_size = 200
-    # si il n'y a pas assez de points, on affiche un scatter plot classique
-    if len(iq_constel) > 400:
+    # selon paramétrage : affichage de la constellation en hexbin (par défaut) ou en scatter
+    if constel_hexbins is True:
         ax.hexbin(np.real(iq_constel), np.imag(iq_constel), gridsize=grid_size, cmap='jet', bins='log', mincnt=1)
     else:
         ax.scatter(np.real(iq_constel), np.imag(iq_constel), s=5)
@@ -1575,7 +1583,7 @@ def phase_cumulative():
     del hist, bins, canvas
 
 def frequency_cumulative():
-    # fonc expérimentale de distribution fréquence instantanée. A évaluer/améliorer
+    # fonc de distribution de la fréquence instantanée. A évaluer/améliorer
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -1611,6 +1619,7 @@ def set_diff_params():
         print("Fenêtre de lissage des transitions définie à ", diff_window)
 
 def morlet_wavelet():
+    # fonc expérimentale de transformée en ondelettes de Morlet. A évaluer/améliorer
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
     clear_plot()
     fig = plt.figure()
@@ -1958,6 +1967,52 @@ def place_relative(popup, parent, w=300, h=200):
     popup.transient(parent)
     popup.deiconify()  # affiche la popup
     popup.lift()
+
+# fonc de modif du signal après sélection d'une zone par curseurs.
+def modify_signal_in_zone():
+    global iq_sig, s_rate, cursor_points, cursor_lines, distance_text, N, overlap, time_step
+    if len(cursor_points) == 2 :
+        # déplace la fréquence centrale du signal à 0 Hz en fonction de la position du curseur (moyenne des 2 points)
+        fcenter = cursor_points[0][0]/2 + cursor_points[1][0]/2
+        iq_sig = iq_sig * np.exp(-1j*2*np.pi*fcenter*np.arange(len(iq_sig))/s_rate)
+        new_fs = int(abs(cursor_points[0][0] - cursor_points[1][0])*2) # nouvelle fréquence d'échantillonnage = 2x la distance en x entre les 2 points
+        iq_sig = sm.lowpass_filter(iq_sig, max(abs(cursor_points[0][0]), abs(cursor_points[1][0]))-abs(fcenter), s_rate, filter_order, filter_kind)
+        # le filtrage coupe les composantes au-delà de la moitié de la nouvelle fréquence d'échantillonnage, centrée sur 0 Hz
+    else: # si pas 2 points, affiche message d'erreur et ne modifie rien
+        tk.messagebox.showinfo(lang["error"], lang["2pt_cursors"], parent=root)
+        if debug is True:
+            print("Deux points de curseurs doivent être définis pour modifier le signal")
+        return
+    new_fs = int(new_fs)
+    if s_rate > new_fs: # modifie la fréquence d'échantillonnage uniquement si inférieure à l'actuelle
+        iq_sig, s_rate = sm.resample_polyphase(iq_sig, s_rate, new_fs)
+    else:
+        pass
+    # ajuste les paramètres de la FFT en fonction de la nouvelle fréquence d'échantillonnage et durée du signal (idem load classique)
+    if len(iq_sig) > 1e6: # si plus d'un million d'échantillons
+        N = 4096
+    elif 1e5 < len(iq_sig) < 1e6 : # si entre 100k et 1 million d'échantillons
+        N = 1024
+    elif len(iq_sig) < s_rate: # si moins d'une seconde
+        # base de résolution = 25 Hz par défaut, proportionnellement à la durée si > 1 seconde
+        N = (s_rate//25)*(len(iq_sig)/s_rate) 
+        N = (int(N/2))*2 # N pair de préférence
+        if N < 4: # taille minimum de 4 échantillons
+            N = 4
+    elif len(iq_sig) < 5e3:
+        N = 128 # taille de fenêtre FFT pour les signaux > 1 sec mais < 5k échantillons
+    else:
+        N = 512 # taille de fenêtre FFT par défaut
+    overlap = N//overlap_value
+    time_step = (N - overlap) // 2
+    # coupe le signal (en durée) entre les 2 points sélectionnés
+    cut_signal_cursors()
+    # la fonction de découpe envoie aussi les graphes de base à jour, donc pas besoin de les refaire ici
+    if debug is True:
+        print("Signal modifié entre les points de curseurs, nouvelle fréquence d'échantillonnage : ", s_rate)
+        print("N ajusté à ", N, " overlap à ", overlap, " time_step à ", time_step)
+        print("Nombre d'échantillons du signal modifié : ", len(iq_sig))
+        print("Durée du signal modifié : ", len(iq_sig)/s_rate, " secondes")
 
 # sauvegarde le signal (modifié ou non) en nouveau fichier wav
 def save_as_wav():
@@ -2857,11 +2912,11 @@ def advanced_settings():
     global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
     global scf_alpha_step, costas_damping, costas_bw_factor, eye_channel, eye_num_traces, eye_symbols
     global mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_viterbi_penalty, mfsk_bin_width_cluster_factor, mfsk_hop_factor
-    global alpha_noise, filter_kind
+    global alpha_noise, filter_kind, constel_hexbins
     # Popup pour les paramètres avancés
     popup = tk.Toplevel()
     popup.title(lang["advanced_settings"])
-    place_relative(popup, root, 600, 850)
+    place_relative(popup, root, 600, 900)
     # Type de filtre Butterworth, Chebyshev I, Chebyshev II : menu déroulant
     tk.Label(popup, text=lang["filter_kind"]).pack()
     filter_kind_var = tk.StringVar(value=filter_kind)
@@ -2926,6 +2981,8 @@ def advanced_settings():
     tk.Label(popup, text=lang["mfsk_viterbi_penalty"]).pack()
     mfsk_viterbi_penalty_var = tk.DoubleVar(value=mfsk_viterbi_penalty)
     tk.Entry(popup, textvariable=mfsk_viterbi_penalty_var).pack() # pénalité Viterbi pour démodulation MFSK
+    constel_hexbins_var = tk.BooleanVar(value=constel_hexbins) # pour l'affichage en hexbins de la constellation
+    tk.Checkbutton(popup, text=lang["constel_hexbins"], variable=constel_hexbins_var).pack()
 
     def save_settings():
         nonlocal filter_order_var, peak_prominence_var, acf_min_distance_var, tau_modifier_var, precision_var
@@ -2933,11 +2990,11 @@ def advanced_settings():
         nonlocal eye_channel_var, eye_num_traces_var, eye_symbols_var
         nonlocal mfsk_tresh_db_var, mfsk_peak_prom_db_var, mfsk_win_factor_var, mfsk_viterbi_penalty_var
         nonlocal mfsk_cluster_bin_width_factor_var, mfsk_hop_factor_var
-        nonlocal alpha_noise_var, filter_kind_var
+        nonlocal alpha_noise_var, filter_kind_var, constel_hexbins_var
         global filter_order, peak_prominence, acf_min_distance, tau_modifier, precision, morlet_fc, morlet_nfreq
         global scf_alpha_step, costas_damping, costas_bw_factor, eye_channel, eye_num_traces, eye_symbols
         global mfsk_tresh_db, mfsk_peak_prom_db, mfsk_win_factor, mfsk_viterbi_penalty, mfsk_bin_width_cluster_factor, mfsk_hop_factor
-        global alpha_noise, filter_kind
+        global alpha_noise, filter_kind, constel_hexbins
         filter_order = filter_order_var.get()
         peak_prominence = peak_prominence_var.get()
         acf_min_distance = acf_min_distance_var.get()
@@ -2959,6 +3016,7 @@ def advanced_settings():
         mfsk_viterbi_penalty = mfsk_viterbi_penalty_var.get()
         alpha_noise = alpha_noise_var.get()
         filter_kind = filter_kind_var.get()
+        constel_hexbins = constel_hexbins_var.get()
         if debug is True:
             print(f"Paramètres avancés mis à jour : "
                   f"filter_order={filter_order}, peak_prominence={peak_prominence}, acf_min_distance={acf_min_distance}, "
@@ -2967,7 +3025,8 @@ def advanced_settings():
                   f"eye_channel={eye_channel}, eye_num_traces={eye_num_traces}, eye_symbols={eye_symbols}, "
                   f"mfsk_tresh_db={mfsk_tresh_db}, mfsk_peak_prom_db={mfsk_peak_prom_db}, mfsk_win_factor={mfsk_win_factor}, "
                   f"mfsk_hop_factor={mfsk_hop_factor}, mfsk_bin_width_cluster_factor={mfsk_bin_width_cluster_factor}, "
-                  f"mfsk_viterbi_penalty={mfsk_viterbi_penalty}, alpha_noise={alpha_noise}, filter_kind={filter_kind}")
+                  f"mfsk_viterbi_penalty={mfsk_viterbi_penalty}, alpha_noise={alpha_noise}, filter_kind={filter_kind}, "
+                  f"constel_hexbins={constel_hexbins}")
         popup.destroy()
     tk.Button(popup, text="OK", command=save_settings).pack()
 
@@ -3056,6 +3115,7 @@ def load_lang_changes():
     cut_submenu = tk.Menu(mod_menu,tearoff=0)
     cut_submenu.add_command(label=lang["cut_val"], command=cut_signal)
     cut_submenu.add_command(label=lang["cut_cursors"], command=cut_signal_cursors)
+    cut_submenu.add_command(label=lang["modify_in_zone"], command=modify_signal_in_zone)
     mod_menu.add_cascade(label=lang["cut_signal"],menu=cut_submenu)
     # Submenu fenêtrage
     window_submenu = tk.Menu(mod_menu,tearoff=0)

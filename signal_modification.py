@@ -140,20 +140,6 @@ def wiener_filter(iq_sig, size=None, noise=None):
 
     return real + 1j * imag # application du filtre de Wiener de scipy
 
-def spectral_soft_denoise(iq_sig, alpha=1.5):
-    # Applique une atténuation dans le domaine fréquentiel pour réduire le bruit sous le seuil défini par alpha * bruit
-    spectrum = np.fft.fft(iq_sig)
-    mag = np.abs(spectrum)
-
-    noise_floor = np.median(mag)
-    threshold = alpha * noise_floor
-
-    # Soft : atténuation progressive au lieu de suppression brutale
-    gain = np.clip((mag - threshold) / mag, 0, 1)
-    spectrum *= gain
-
-    return np.fft.ifft(spectrum)
-
 def fir_filter(iq_sig, fs, cutoff, filter_type='lowpass', numtaps=101,window='hamming'):
     """Applique un filtre FIR (Finite Impulse Response) pour filtrer le signal IQ"""
     if filter_type not in ['lowpass', 'highpass', 'bandpass', 'bandstop']:
@@ -220,6 +206,23 @@ def matched_filter(iq_sig, samp_rate, symbol_rate, factor=0.5, pulse_shape='rect
     filtered_signal = convolve(iq_sig, kernel, mode='same')
 
     return filtered_signal
+
+# Débruitage spectral
+def spectral_soft_denoise(iq_sig, alpha=1.5):
+    """Débruitage spectral par atténuation progressive.
+     Avantage : préserve mieux les composantes faibles que le seuillage dur."""
+    # Applique une atténuation dans le domaine fréquentiel pour réduire le bruit sous le seuil défini par alpha * bruit
+    spectrum = np.fft.fft(iq_sig)
+    mag = np.abs(spectrum)
+
+    noise_floor = np.median(mag)
+    threshold = alpha * noise_floor
+
+    # Soft : atténuation progressive au lieu de suppression brutale
+    gain = np.clip((mag - threshold) / mag, 0, 1)
+    spectrum *= gain
+
+    return np.fft.ifft(spectrum)
 
 def hilbert(x):
     """Calcule le signal analytique d'un signal réel x avec la transformée de Hilbert"""

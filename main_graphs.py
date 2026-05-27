@@ -3,7 +3,7 @@
 import numpy as np
 import dsp_funcs as df
 
-# Spectrogramme
+# Spectrogramme simple (FFT sans overlap)
 def compute_spectrogram(iq_sig, samp_rate, N, window_func='hann'):
     """Spectrogramme basé sur la FFT Cooley-Tukey (numpy.fft), 
     cf PyDSP (Dr M. Lichtman), sans overlap"""
@@ -64,8 +64,8 @@ def compute_dsp(iq_sig, samp_rate, N=256, overlap=128, window_type='hann', nfft=
     """Densité spectrale de puissance (PSD) via méthode moyenne périodogramme (Welch)"""
     if step_size is None:
         step_size = (N - overlap)// 2
-    if nfft is None:
-        nfft = N * 4
+    if nfft is None or nfft < N: # taille FFT forcée plus grande que la fenêtre
+        nfft = N * 2
     step_size = N - overlap  # match STFT
     num_windows = (len(iq_sig) - overlap) // step_size
     psd_sum = np.zeros(nfft)
@@ -85,6 +85,7 @@ def compute_dsp(iq_sig, samp_rate, N=256, overlap=128, window_type='hann', nfft=
     # Freq bins
     freqs = np.fft.fftfreq(nfft, d=1/samp_rate)
     psd /= np.sum(window**2)  # Correction fenêtrage
+    psd /= nfft / N  # Correction taille FFT vs fenêtre
 
     return freqs, psd
 

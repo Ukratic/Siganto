@@ -742,6 +742,7 @@ def estimate_timing_phase(signal, sps, zero=0):
 
 
 def gardner_timing(samples, sps):
+    """Implémentation de l'algorithme de timing de Gardner pour échantillonnage symbolique."""
     out = []
     mu = 0  # accumulateur de timing
     i = 0
