@@ -436,3 +436,40 @@ def calc_ofdm(alpha0,estimated_ofdm_symbol_duration, bandwidth):
     N = N - 1
 
     return Tu, Tg, Ts, Df, N
+
+# Experimental
+def compute_bispectrum(signal, fs, nfft=256, overlap=128,window_type='hann'):
+    """Calcul du bispectre d'un signal IQ, mesure de la non-linéarité et de 
+    la dépendance de phase entre les composantes fréquentielles."""
+    # Segmentation en fenêtres avec overlap
+    hop_size = int(nfft - overlap)
+    num_segments = (len(signal) - nfft) // hop_size + 1
+    if num_segments <= 0:
+        return None, None # Signal trop court
+    # Fenêtrage
+    window = df.get_window(window_type, nfft)
+    # FFT pour chaque segment. Shape: (num_segments, nfft)
+    ffts = np.zeros((num_segments, nfft), dtype=complex)
+    for i in range(num_segments):
+        start = i * hop_size
+        chunk = signal[start:start+nfft] * window
+        ffts[i, :] = np.fft.fft(chunk)
+
+    # Bispectrum : B(f1, f2) = E[ X(f1) * X(f2) * conj(X(f1+f2)) ]
+    B = np.zeros((nfft, nfft), dtype=complex)
+    # Loop sur toutes les combinaisons de fréquences f1 et f2
+    for f1 in range(nfft):
+        for f2 in range(nfft):
+            # Comobinaison de fréquences modulo nfft
+            f3 = (f1 + f2) % nfft
+            # Vectorisation sur les segments pour calculer la moyenne
+            prod = ffts[:, f1] * ffts[:, f2] * np.conj(ffts[:, f3])
+            B[f1, f2] = np.mean(prod)
+            
+    # Shift pour centrer le zéro fréquence
+    B_shifted = np.fft.fftshift(B)
+    B_mag = np.abs(B_shifted)
+    # Axe des fréquences pour affichage
+    f = np.linspace(-fs/2, fs/2, nfft)
+    
+    return f, B_mag

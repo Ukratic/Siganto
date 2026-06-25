@@ -6,7 +6,9 @@ Read .wav files (recorded from SDR tools, obtained from somewhere, simulated...)
 FSK & PSK demodulation is also available, with more to come later.<br>
 Real-time applications such as dealing with incoming streams are outside the scope of this tool.<br>
 
-Be aware that the entire file is displayed, not looped over in chunks as many other SDR tools do, especially when they are meant to handle real-time display. Therefore, this tool is not meant to work with very long recordings. You may experience some acceptable sluggishness if your file contains samples in the order of a few millions, but the GUI will likely become downright painful to use with a file containing several tens or hundreds of millions of samples or more. Splitting them in smaller chunks before analysis is recommended. Warnings are in place for a few potentially breaking actions with large files.<br>
+The entire file is displayed, not looped over in chunks as many other SDR tools do, especially when they are meant to handle real-time display. 
+SigAnTo can handle relatively large files (tens of millions of samples) without significant drawbacks, but isn't equipped to smoothly deal with multi-gigabyte files.<br>
+Some functions are computationally very demanding and should not be used with large files, plotting the SCF for instance. In those cases, splitting the file into smaller chunks before analysis is recommended. Warnings are in place for those functions that may crash with large files.<br>
 
 <img src="https://github.com/Ukratic/Siganto/blob/main/images/pic_1.png" alt="Main"/>
 
@@ -78,13 +80,11 @@ The first step relies on the autocorrelation function.
 - Audio playback (first pick the appropriate demodulation in the corresponding tab prior to audio playback, depending on how that signal was sourced and recorded). Requires the sounddevice library.
 
 ### Changelog :
-- *V1.10* :<br>
+- *Continuous improvements of v1.1 (a to i)* :<br>
 -- Fixed power scaling on various graphs. Normalized when exact values are not relevant.<br>
 -- Added polyphase resampling.<br>
 -- Renamed some symbol rate graphs with a (hopefully) clearer title.<br>
 -- Automatic symbol rate estimation now has a confidence level.<br>
-
-- *since v1.10a* :<br>
 -- Almost all parameters now accessible (options tab) & no longer hardcoded.<br>
 -- SSB demod.<br>
 -- Added a graph for the (already used in baud rate estimation before demod) Clock Frequency Detection.<br>
@@ -99,6 +99,10 @@ The first step relies on the autocorrelation function.
 -- MFSK demodulation can be executed on specified frequencies instead of relying on detection.<br>
 -- Improved time resolution on spectrogram.<br>
 -- Added a modify-cut option in time & frequency to select a part of the signal with cursors.<br>
+
+- *V1.2* :<br>
+-- Modified pre-processing before plotting, enabling display of large files without performance issues.
+-- Experimental graph added : Bispectrum. Susceptible to performance issues.
 
 ### Using the app
 1. Clone/download the code in this repo to modify the code as needed for your purposes, run the main file *gui_main.py* to launch.<br>

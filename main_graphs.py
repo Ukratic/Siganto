@@ -46,7 +46,10 @@ def compute_stft(iq_sig, samp_rate, window_size, overlap, window_func='hann', nf
             segment = np.pad(segment, (0, window_size - len(segment)))
         segment = segment * window
         # Compute FFT
-        fft_segment = np.fft.fft(segment, n=nfft)
+        if len(iq_sig) < 5e6:
+            fft_segment = np.fft.fft(segment, n=nfft)
+        else:
+            fft_segment = np.fft.fft(segment)
         stft_matrix.append(fft_segment)
         times.append(start / samp_rate)
 

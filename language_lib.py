@@ -275,6 +275,8 @@ def get_fra_lib():
         "set_time_step": "Définir le temps entre les fenêtres FFT",
         "constel_hexbins": "Afficher les points de la constellation en bins hexagonaux (clusters) au lieu de points de dispersion",
         "modify_in_zone": "Découpe en temps & fréquence le signal dans une zone définie (curseurs)",
+        "bispectrum_desc" : "Magnitude du bispectre (expérimental)",
+        "bispectrum" : "Expérimental : Bispectre",
 
     }
     return fra_lib
@@ -554,6 +556,9 @@ def get_eng_lib():
         "set_time_step": "Set time step between FFT windows",
         "constel_hexbins": "Display constellation points in hexagonal bins (clusters) instead of scatter points",
         "modify_in_zone": "Cut in time & frequency the signal in a defined area (cursors)",
+        "bispectrum_desc" : "Bispectrum magnitude (experimental)",
+        "bispectrum" : "Experimental : Bispectrum",
+
 
     }
     return eng_lib

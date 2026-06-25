@@ -80,7 +80,7 @@ else:
     root = tk.Tk()
 root.withdraw()
 loading_screen = tk.Toplevel(root)
-loading_screen.title("SigAnTo v1.10")
+loading_screen.title("SigAnTo v1.2")
 loading_screen.geometry("250x100")
 loading_screen.iconbitmap(icon_path)
 loading_label = tk.Label(loading_screen, text="Loading...")
@@ -240,22 +240,35 @@ def load_wav():
         if debug is True:
             print("Erreur de conversion IQ")
         tk.messagebox.showerror(lang["error"], lang["wav_conversion"], parent=root)
-    if len(iq_sig) > 1e6: # si plus d'un million d'échantillons
+    if len(iq_sig) > 5e6: # si plus de 5 millions d'échantillons
         N = 4096
+        # pas de recouvrement pour les signaux très longs, pour accélérer le calcul
+        overlap = 0
+        time_step = N
+    elif len(iq_sig) > 1e6: # si plus d'un million d'échantillons
+        N = 4096
+        overlap = N//(overlap_value*4)
+        time_step = N - overlap
     elif 1e5 < len(iq_sig) < 1e6 : # si entre 100k et 1 million d'échantillons
         N = 1024
+        overlap = N//overlap_value
+        time_step = N - overlap
     elif len(iq_sig) < s_rate: # si moins d'une seconde
         # base de résolution = 25 Hz par défaut, proportionnellement à la durée si > 1 seconde
         N = (s_rate//25)*(len(iq_sig)/s_rate) 
         N = (int(N/2))*2 # N pair de préférence
         if N < 4: # taille minimum de 4 échantillons
             N = 4
+        overlap = N//overlap_value
+        time_step = (N - overlap) // 2
     elif len(iq_sig) < 5e3:
         N = 128 # taille de fenêtre FFT pour les signaux > 1 sec mais < 5k échantillons
+        overlap = N//overlap_value
+        time_step = (N - overlap) // 2
     else:
         N = 512 # taille de fenêtre FFT par défaut
-    overlap = N//overlap_value
-    time_step = (N - overlap) // 2
+        overlap = N//overlap_value
+        time_step = (N - overlap) // 2
 
     display_file_info()
     # Plot graphes initiaux après chargement du fichier
@@ -310,6 +323,97 @@ def close_wav():
         print("Mémoire nettoyée:" , gc.get_stats())
     display_file_info()
 
+def downsample_for_plotting(x_array, y_array, target_points=4000):
+    # Décimation 1D pour l'affichage, en conservant les pics et transitoires
+    n_samples = len(y_array)
+    if n_samples <= target_points:
+        return x_array, y_array
+
+    # Calculer la taille du bin pour atteindre le nombre de points cible
+    bin_size = int(np.ceil(n_samples / (target_points // 2)))
+    # Répartition des données en bins, avec padding si nécessaire
+    pad_size = (bin_size - (n_samples % bin_size)) % bin_size
+    if pad_size > 0:
+        y_padded = np.pad(y_array, (0, pad_size), mode='edge')
+        x_padded = np.pad(x_array, (0, pad_size), mode='edge')
+    else:
+        y_padded = y_array
+        x_padded = x_array
+
+    # Reshape pour créer des bins et trouver les min/max dans chaque bin
+    reshaped_data = y_padded.reshape(-1, bin_size)
+    reshaped_x = x_padded.reshape(-1, bin_size)
+    # Extraction des indices des min et max pour chaque bin
+    min_idx = np.argmin(reshaped_data, axis=1)
+    max_idx = np.argmax(reshaped_data, axis=1)
+    # Générer les indices globaux pour les min et max
+    row_offsets = np.arange(reshaped_data.shape[0]) * bin_size
+    flat_min_idx = min_idx + row_offsets
+    flat_max_idx = max_idx + row_offsets
+
+    # Créer un tableau d'indices intercalés pour conserver l'ordre chronologique
+    interleaved_idx = np.empty(flat_min_idx.size * 2, dtype=int)
+    # Déterminer si le min ou le max vient en premier pour chaque bin
+    min_first = min_idx < max_idx
+    interleaved_idx[0::2] = np.where(min_first, flat_min_idx, flat_max_idx)
+    interleaved_idx[1::2] = np.where(min_first, flat_max_idx, flat_min_idx)
+
+    # Slice les tableaux d'origine avec les indices intercalés pour obtenir les données décimées
+    return x_padded[interleaved_idx], y_padded[interleaved_idx]
+
+def update_on_zoom(event_ax):
+    # Callback pour mettre à jour les données du graphe décimé, lors d'un zoom/déplacement
+    xmin, xmax = event_ax.get_xlim()
+    global iq_sig, s_rate
+    
+    # Déterminer si cas particulier (utilisé notamment pour la fréquence instantanée)
+    if hasattr(event_ax, "_custom_time") and hasattr(event_ax, "_custom_data"):
+        full_time = event_ax._custom_time
+        full_data = event_ax._custom_data
+    else:
+        # Sinon défaut (amplitude du signal par ex)
+        full_time = np.arange(len(iq_sig)) / s_rate
+        full_data = iq_sig / np.max(np.abs(iq_sig))
+
+    # Sélectionner uniquement les données visibles dans la fenêtre zoomée
+    visible_mask = (full_time >= xmin) & (full_time <= xmax)
+    slice_time = full_time[visible_mask]
+    slice_data = full_data[visible_mask]
+    if len(slice_time) < 2:
+        return
+    
+    # Décimation sur les données visibles pour l'affichage
+    t_ds, data_ds = downsample_for_plotting(slice_time, slice_data, target_points=4000)
+    # Mise à jour des données du graphe avec les données décimées
+    line = event_ax.get_lines()[0]
+    line.set_data(t_ds, data_ds)
+    event_ax.figure.canvas.draw_idle()
+
+def downsample_spectrogram(matrix, target_cols=1024, target_rows=1024):
+    # Décimation 2D pour l'affichage, en conservant les pics et transitoires
+    rows, cols = matrix.shape
+    # 1. Décimation des colonnes (Axe temporel ou fréquentiel selon l'orientation)
+    if cols > target_cols:
+        col_bin = int(np.ceil(cols / target_cols))
+        pad_cols = (col_bin - (cols % col_bin)) % col_bin
+        if pad_cols > 0:
+            matrix = np.pad(matrix, ((0, 0), (0, pad_cols)), mode='edge')
+        # Reshape et prendre le max le long de l'axe des bins
+        rows, cols = matrix.shape
+        matrix = matrix.reshape(rows, -1, col_bin).max(axis=2)
+        rows, cols = matrix.shape
+
+    # 2. Décimation des lignes
+    if rows > target_rows:
+        row_bin = int(np.ceil(rows / target_rows))
+        pad_rows = (row_bin - (rows % row_bin)) % row_bin
+        if pad_rows > 0:
+            matrix = np.pad(matrix, ((0, pad_rows), (0, 0)), mode='edge')
+        # Reshape comme pour les colonnes
+        matrix = matrix.reshape(-1, row_bin, cols).max(axis=1)
+
+    return matrix
+
 # Fonction des graphes de base
 def plot_initial_graphs():
     global toolbar, ax, fig, cursor_points, cursor_lines, distance_text, bw
@@ -329,6 +433,18 @@ def plot_initial_graphs():
         print(lang["no_file"])
         return
     freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice, nfft=N*4, step_size=time_step)
+    if debug is True:
+        print("STFT calculée: ", stft_matrix.shape[0], " colonnes, ", stft_matrix.shape[1], " lignes")
+    if stft_matrix.shape[0] > 1024 and stft_matrix.shape[1] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=1024, target_rows=1024)  # Décimation pour performance
+    elif stft_matrix.shape[1] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=1024, target_rows=stft_matrix.shape[0])
+    elif stft_matrix.shape[0] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=stft_matrix.shape[1], target_rows=1024)
+    else:
+        pass # pas de décimation si déjà < 1024x1024
+    if debug is True:
+        print("Spectrogramme final: ", stft_matrix.shape[0], " colonnes, ", stft_matrix.shape[1], " lignes")
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
@@ -399,6 +515,23 @@ def plot_other_graphs():
         return
     # STFT
     freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice, nfft=N*4, step_size=time_step)
+    if debug is True:
+        print("STFT calculée: ", stft_matrix.shape[0], " colonnes, ", stft_matrix.shape[1], " lignes")
+    if stft_matrix.shape[0] > 1024 and stft_matrix.shape[1] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=1024, target_rows=1024)  # Décimation pour performance
+    elif stft_matrix.shape[1] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=1024, target_rows=stft_matrix.shape[0])
+    elif stft_matrix.shape[0] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=stft_matrix.shape[1], target_rows=1024)
+    else:
+        pass # pas de décimation si déjà < 1024x1024
+    if debug is True:
+        print("Spectrogramme final: ", stft_matrix.shape[0], " colonnes, ", stft_matrix.shape[1], " lignes")
+    if freqs is None:
+        print(lang["error_stft"])
+        # message d'erreur si la STFT n'a pas pu être calculée
+        tk.messagebox.showerror(lang["error"], lang["error_stft"], parent=root)
+        return
     stft = ax[0].imshow(stft_matrix, aspect='auto', extent=[s_rate / -2, s_rate / 2, len(iq_sig) / s_rate, 0], cmap=cm.jet)
     ax[0].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[0].set_ylabel(f"{lang['time_xy']} [s]")
@@ -422,8 +555,16 @@ def plot_other_graphs():
     wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_sig)))**2
     wav_mag = wav_mag / np.max(wav_mag)
     f = np.linspace(s_rate / -2, s_rate / 2, len(iq_sig)) # freq en Hz
+    if debug is True:
+        print(f"Points avant décimation du graphe Pmax: {len(f)}")
+    peak_idx = np.argmax(wav_mag)
+    peak_freq = f[peak_idx]
+    peak_val = wav_mag[peak_idx]
+    f, wav_mag = downsample_for_plotting(f, wav_mag, target_points=4000)
+    if debug is True:
+        print(f"Points après décimation du graphe Pmax: {len(f)}")
     line_spectrum, = ax[2].plot(f, wav_mag)
-    ax[2].plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # point max
+    ax[2].plot(peak_freq, peak_val, 'rx') # max
     ax[2].grid()
     ax[2].set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax[2].set_ylabel(lang["norm_power"])
@@ -440,6 +581,15 @@ def plot_other_graphs():
         freq_label.config(text=f"{lang['offset_freq']}: {fcenter} Hz")
         # Màj STFT
         freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice, nfft=N*4, step_size=time_step)
+
+        if stft_matrix.shape[0] > 1024 and stft_matrix.shape[1] > 1024:
+            stft_matrix = downsample_spectrogram(stft_matrix, target_cols=1024, target_rows=1024)  # Décimation pour performance
+        elif stft_matrix.shape[1] > 1024:
+            stft_matrix = downsample_spectrogram(stft_matrix, target_cols=1024, target_rows=stft_matrix.shape[0])
+        elif stft_matrix.shape[0] > 1024:
+            stft_matrix = downsample_spectrogram(stft_matrix, target_cols=stft_matrix.shape[1], target_rows=1024)
+        else:
+            pass # pas de décimation si déjà < 1024x1024
         stft.set_data(stft_matrix)
         # Màj constellation
         iq_constel = iq_sig/np.max(np.abs(iq_sig))
@@ -447,7 +597,11 @@ def plot_other_graphs():
         # Màj DSP
         wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_sig)))**2
         wav_mag = wav_mag / np.max(wav_mag)
+        f = np.linspace(s_rate / -2, s_rate / 2, len(iq_sig)) # freq en Hz
+        f, wav_mag = downsample_for_plotting(f, wav_mag, target_points=4000)
         line_spectrum.set_ydata(wav_mag)
+        if debug is True:
+            print("Mise à jour du graphe avec décalage: ", fcenter, " Hz")
 
         canvas.draw()
 
@@ -547,11 +701,12 @@ def time_amplitude():
     ax = plt.subplot()
     time = np.arange(len(iq_sig)) / s_rate
     iq_norm = iq_sig / np.max(np.abs(iq_sig))
+    time, iq_norm = downsample_for_plotting(time, iq_norm, target_points=4000)
     ax.plot(time, iq_norm)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel(lang["norm_amplitude"])
     ax.grid(True)
-
+    ax.callbacks.connect('xlim_changed', update_on_zoom)
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
     toolbar.update()
@@ -671,11 +826,25 @@ def stft_solo():
 
     ax = plt.subplot()
     freqs, times, stft_matrix = mg.compute_stft(iq_sig, s_rate, window_size=N, overlap=overlap, window_func=window_choice, nfft=N*4, step_size=time_step)
+    if debug is True:
+        print("STFT calculée: ", stft_matrix.shape[0], " colonnes, ", stft_matrix.shape[1], " lignes")
+    if stft_matrix.shape[0] > 1024 and stft_matrix.shape[1] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=1024, target_rows=1024)  # Décimation pour performance
+    elif stft_matrix.shape[1] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=1024, target_rows=stft_matrix.shape[0])
+    elif stft_matrix.shape[0] > 1024:
+        stft_matrix = downsample_spectrogram(stft_matrix, target_cols=stft_matrix.shape[1], target_rows=1024)
+    else:
+        pass # pas de décimation si déjà < 1024x1024
+    if debug is True:
+        print("Spectrogramme final: ", stft_matrix.shape[0], " colonnes, ", stft_matrix.shape[1], " lignes")
     if freqs is None:
         print(lang["error_stft"])
         # message d'erreur si la STFT n'a pas pu être calculée
         tk.messagebox.showerror(lang["error"], lang["error_stft"], parent=root)
         return
+    if debug is True:
+        print("Affichage STFT")
     ax.imshow(stft_matrix, aspect='auto', extent = [s_rate/-2, s_rate/2, len(iq_sig)/s_rate, 0],cmap=cm.jet)
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(f"{lang['time_xy']} [s]")
@@ -1323,8 +1492,16 @@ def dsp_max():
     wav_mag = np.abs(np.fft.fftshift(np.fft.fft(iq_sig)))**2
     wav_mag = wav_mag / np.max(wav_mag)
     f = np.linspace(s_rate/-2, s_rate/2, len(iq_sig)) # frq en Hz
+    if debug is True:
+        print(f"Points avant décimation du graphe Pmax: {len(f)}")
+    peak_idx = np.argmax(wav_mag)
+    peak_freq = f[peak_idx]
+    peak_val = wav_mag[peak_idx]
+    f, wav_mag = downsample_for_plotting(f, wav_mag, target_points=4000)
+    if debug is True:
+        print(f"Points après décimation du graphe Pmax: {len(f)}")
     ax.plot(f, wav_mag)
-    ax.plot(f[np.argmax(wav_mag)], np.max(wav_mag), 'rx') # show max
+    ax.plot(peak_freq, peak_val, 'rx') # max
     ax.grid()
     ax.set_xlabel(f"{lang['freq_xy']} [Hz]")
     ax.set_ylabel(lang["norm_power"])
@@ -1522,12 +1699,15 @@ def phase_difference():
         return
     ax = plt.subplot()
     time, phase_diff = em.phase_time_angle(iq_sig, s_rate, diff_window, window_choice)
+    ax._custom_time = time
+    ax._custom_data = phase_diff
+    time, phase_diff = downsample_for_plotting(time, phase_diff, target_points=4000)
     ax.plot(time, phase_diff)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel(f"{lang['diff_phase']} [rad]")
     ax.set_title(f"{lang['smoothing']} {diff_window}")
     ax.grid(True)
-
+    ax.callbacks.connect('xlim_changed', update_on_zoom)
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
     toolbar.update()
@@ -1546,12 +1726,15 @@ def freq_difference():
         return
     ax = plt.subplot()
     time, freq_diff = em.frequency_transitions(iq_sig, s_rate, diff_window, window_choice)
+    ax._custom_time = time
+    ax._custom_data = freq_diff
+    time, freq_diff = downsample_for_plotting(time, freq_diff, target_points=4000)
     ax.plot(time, freq_diff)
     ax.set_xlabel(f"{lang['time_xy']} [s]")
     ax.set_ylabel(f"{lang['freq_xy']} [Hz]")
     ax.set_title(f"{lang['smoothing']} {diff_window}")
     ax.grid(True)
-
+    ax.callbacks.connect('xlim_changed', update_on_zoom)
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
     toolbar.update()
@@ -1642,7 +1825,6 @@ def morlet_wavelet():
     ax.set_ylabel("Morlet  freq [π rad/sample]")
     cbar = fig.colorbar(im, ax=ax)
     cbar.set_label(lang["norm_power"])
-
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     toolbar = NavigationToolbar2Tk(canvas, root)
     toolbar.update()
@@ -1761,6 +1943,37 @@ def ofdm_results():
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     canvas.draw()
     del fmax, fmin, f, Pxx, alpha_0, popup, canvas
+
+# Experimental : bispectre
+def bispectrum_plot():
+    global toolbar, ax, fig, cursor_points, cursor_lines, distance_text
+    clear_plot()
+    fig = plt.figure()
+    fig.suptitle(lang["bispectrum_desc"])
+    if not filepath:
+        print(lang["no_file"])
+        return
+    ax = plt.subplot()
+    # Génération du bispectre (NFFT=X crée une image de taille X*X)
+    f, B_mag = em.compute_bispectrum(iq_sig, s_rate, nfft=N//2, overlap=N//4, window_type=window_choice)
+    if B_mag is None:
+        if debug is True:
+            print("Echec de la génération du bispectre")
+        return
+    # Normalisation du bispectre pour l'affichage
+    B_mag_norm = B_mag / np.max(B_mag)
+    # Le plan de symétrie devrait montrer une ligne diagonale à 45 degrés de couplage de phase.
+    im = ax.imshow(B_mag_norm, aspect='auto', extent=[s_rate/-2, s_rate/2, s_rate/-2, s_rate/2], cmap=cm.jet, origin='lower')
+    ax.set_xlabel(lang["freq_xy"] + " $f_1$ [Hz]")
+    ax.set_ylabel(lang["freq_xy"] + " $f_2$ [Hz]")
+    fig.colorbar(im, ax=ax, label=lang["norm_power"])
+    ax.grid(True, alpha=0.3)
+    canvas = FigureCanvasTkAgg(fig, plot_frame)
+    toolbar = NavigationToolbar2Tk(canvas, root)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    canvas.draw()
+    del f, B_mag, B_mag_norm, im, canvas
 
 ## Fonctions de gestion des curseurs
 # Calcule distance entre 2 points
@@ -3152,6 +3365,7 @@ def load_lang_changes():
     power_menu.add_command(label=lang["dsp_max"], command=dsp_max)
     power_menu.add_command(label=lang["time_amp"], command=time_amplitude)
     power_menu.add_command(label=lang["signal_power"], command=signal_power)
+    power_menu.add_command(label=lang["bispectrum"], command=bispectrum_plot)
     # Phase
     diff_menu.add_command(label=lang["constellation"], command=constellation)
     diff_menu.add_command(label=lang["distrib_phase"], command=phase_cumulative)
